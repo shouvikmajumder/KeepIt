@@ -54,7 +54,7 @@ export function AuthScaffold({ children }: { children: React.ReactNode }) {
         <View style={styles.header}>
           <CycleMark />
           <Text style={styles.wordmark}>KeepIt</Text>
-          <Text style={styles.tagline}>KNOW WHAT RENEWS BEFORE IT DOES</Text>
+          <Text style={styles.tagline}>KEEP SPENDING MONEY</Text>
         </View>
         {children}
       </ScrollView>
