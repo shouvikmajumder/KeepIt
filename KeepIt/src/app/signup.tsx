@@ -1,7 +1,8 @@
-import { Link, type Href } from "expo-router";
+import { Link, useRouter, type Href } from "expo-router";
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
 import { AuthScaffold, Field, styles, C } from "@/components/auth-ui";
+import { signUpWithEmail } from "@/lib/supabase";
 
 /**
  * KeepIt — create an account.
@@ -20,6 +21,7 @@ export default function SignUp() {
   const [focused, setFocused] = useState<string | null>(null);
   const [errors, setErrors] = useState<Errors>({});
   const [submitting, setSubmitting] = useState(false);
+  const router = useRouter();
 
   const ready =
     username.trim().length > 0 &&
@@ -38,14 +40,36 @@ export default function SignUp() {
     return next;
   }
 
-  function onSubmit() {
+  async function onSubmit() {
     const next = validate();
     setErrors(next);
     if (Object.keys(next).length > 0) return;
     setSubmitting(true);
-    // Supabase sign-up wires in here (design doc §3): email + password create the
-    // account; username is saved to public.profiles as the display name.
-    setTimeout(() => setSubmitting(false), 900);
+    // Supabase creates the account; username goes into user metadata (a DB
+    // trigger can later copy it into public.profiles as the display name).
+    const { error, alreadyRegistered } = await signUpWithEmail(
+      username,
+      email,
+      password,
+    );
+    setSubmitting(false);
+
+    if (alreadyRegistered) {
+      // Email already has an account — steer them to log in instead.
+      Alert.alert(
+        "You already have an account",
+        "An account with this email already exists. Please log in instead.",
+        [{ text: "Go to log in", onPress: () => router.replace("/login" as Href) }],
+      );
+      return;
+    }
+    if (error) {
+      setErrors({ email: error.message });
+      return;
+    }
+    // Account created. If email confirmation is on they'll get a verification
+    // email; send them to the login screen to continue.
+    router.replace("/login" as Href);
   }
 
   return (

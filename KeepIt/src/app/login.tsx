@@ -1,7 +1,8 @@
-import { Link, type Href } from "expo-router";
+import { Link, useRouter, type Href } from "expo-router";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { AuthScaffold, Field, styles } from "@/components/auth-ui";
+import { signInWithEmail } from "@/lib/supabase";
 
 /**
  * KeepIt — log in.
@@ -19,6 +20,7 @@ export default function Login() {
   const [focused, setFocused] = useState<string | null>(null);
   const [errors, setErrors] = useState<Errors>({});
   const [submitting, setSubmitting] = useState(false);
+  const router = useRouter();
 
   const ready = email.trim().length > 0 && password.length > 0;
 
@@ -31,14 +33,22 @@ export default function Login() {
     return next;
   }
 
-  function onSubmit() {
+  async function onSubmit() {
     const next = validate();
     setErrors(next);
     if (Object.keys(next).length > 0) return;
     setSubmitting(true);
-    // Supabase sign-in wires in here (design doc §3): email + password return a
-    // session; supabase-js persists the tokens (not the password).
-    setTimeout(() => setSubmitting(false), 900);
+    // Ask Supabase to sign the user in. On success supabase-js persists the
+    // session tokens (not the password) via the localStorage adapter.
+    const { error } = await signInWithEmail(email, password);
+    setSubmitting(false);
+    if (error) {
+      // Wrong credentials or an unconfirmed account — surface it on the form.
+      setErrors({ password: error.message });
+      return;
+    }
+    // Signed in: head into the app. replace() so Back doesn't return to login.
+    router.replace("/" as Href);
   }
 
   return (
