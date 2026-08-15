@@ -1,4 +1,4 @@
-import { Link, useRouter, type Href } from "expo-router";
+import { Link, type Href } from "expo-router";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { AuthScaffold, Field, styles } from "@/components/auth-ui";
@@ -20,7 +20,6 @@ export default function Login() {
   const [focused, setFocused] = useState<string | null>(null);
   const [errors, setErrors] = useState<Errors>({});
   const [submitting, setSubmitting] = useState(false);
-  const router = useRouter();
 
   const ready = email.trim().length > 0 && password.length > 0;
 
@@ -47,8 +46,8 @@ export default function Login() {
       setErrors({ password: error.message });
       return;
     }
-    // Signed in: head into the app. replace() so Back doesn't return to login.
-    router.replace("/" as Href);
+    // Signed in. No manual navigation: the session change flips the auth guard
+    // in _layout, which routes the user into the app automatically.
   }
 
   return (

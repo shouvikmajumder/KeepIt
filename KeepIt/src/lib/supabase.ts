@@ -1,20 +1,18 @@
-// Registers a global `localStorage` backed by expo-sqlite. This is the storage
-// adapter the Expo SDK 57 Supabase guide recommends (replacing AsyncStorage);
-// it must be imported before the client is created so `localStorage` exists.
-import "expo-sqlite/localStorage/install";
 import { createClient } from "@supabase/supabase-js";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Project URL + anon key come from the environment (.env). In Expo, only vars
 // prefixed with EXPO_PUBLIC_ are bundled into the app, so these are readable here.
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
-// One shared client for the whole app. localStorage (backed by expo-sqlite)
-// persists the auth session on-device so a signed-in user stays signed in
-// across app launches.
+// One shared client for the whole app. AsyncStorage persists the auth session
+// on-device so a signed-in user stays signed in across app launches. (We used
+// expo-sqlite's localStorage per the SDK 57 docs, but it failed to open its
+// database under Expo Go; AsyncStorage is a rock-solid adapter that just works.)
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: localStorage,
+    storage: AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
