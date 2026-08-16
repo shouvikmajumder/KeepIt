@@ -35,8 +35,9 @@ export async function signInWithEmail(email: string, password: string) {
 
 /**
  * Creates a new account from the sign-up screen's fields. The display name is
- * stored in the user's metadata (a DB trigger can later copy it into
- * public.profiles).
+ * stored in the user's metadata under the `display_name` key — the exact key the
+ * Supabase dashboard reads for its "Display name" column (a custom key like
+ * `username` is saved but never shown there).
  *
  * Supabase deliberately hides "this email already exists" to stop attackers
  * probing which emails have accounts, so we can't just query the database (the
@@ -54,7 +55,7 @@ export async function signUpWithEmail(
   const { data, error } = await supabase.auth.signUp({
     email: email.trim(),
     password,
-    options: { data: { username: username.trim() } },
+    options: { data: { display_name: username.trim() } },
   });
 
   const alreadyRegistered =

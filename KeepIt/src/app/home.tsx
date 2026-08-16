@@ -14,7 +14,7 @@ import { useSession } from "@/lib/session";
 export default function Home() {
   const { session } = useSession();
   const username =
-    (session?.user.user_metadata?.username as string | undefined) ?? "there";
+    (session?.user.user_metadata?.display_name as string | undefined) ?? "there";
 
   return (
     <SafeAreaView style={{ flex: 1 }}>
