@@ -26,8 +26,12 @@ function RootNavigator() {
 
       <Stack.Protected guard={!!session}>
         <Stack.Screen name="home" />
-        {/* Slides up as a modal over the list; only reachable when signed in. */}
-        <Stack.Screen name="add-subscription" options={{ presentation: "modal" }} />
+        {/* The "+ Add" button opens this chooser as a modal over the list. The
+            two paths it offers (the manual form and the connected-accounts
+            placeholder) push in as cards on top of this same modal. */}
+        <Stack.Screen name="add-options" options={{ presentation: "modal" }} />
+        <Stack.Screen name="add-subscription" />
+        <Stack.Screen name="connected-accounts" />
       </Stack.Protected>
 
       <Stack.Protected guard={!session}>

@@ -120,10 +120,10 @@ export default function Home() {
         />
       )}
 
-      {/* Floating "+ Add" button — navigates to the add-subscription screen. */}
+      {/* Floating "+ Add" button — opens the chooser (manual vs. connected). */}
       <Pressable
         style={styles.addButton}
-        onPress={() => router.push("/add-subscription")}
+        onPress={() => router.push("/add-options")}
         accessibilityRole="button"
       >
         <Text style={styles.addButtonText}>+ Add subscription</Text>

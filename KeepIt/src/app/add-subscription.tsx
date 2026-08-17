@@ -46,7 +46,10 @@ export default function AddSubscription() {
       setError(error.message);
       return;
     }
-    router.back(); // back to the list
+    // The form is reached via the chooser modal (home -> add-options -> here), so
+    // a plain back() would land on the chooser. Dismiss the whole modal stack
+    // instead, popping straight back to the home list.
+    router.dismissTo("/home");
   }
 
   return (
