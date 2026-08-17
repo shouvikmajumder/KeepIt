@@ -1,11 +1,11 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/lib/session";
 import { C, Font } from "@/lib/theme";
-import { listSubscriptions, type Subscription } from "@/lib/subscriptions";
+import { deleteSubscription, listSubscriptions, type Subscription } from "@/lib/subscriptions";
 
 /**
  * KeepIt — home. The main signed-in screen: a list of the user's subscriptions
@@ -40,6 +40,28 @@ export default function Home() {
       };
     }, []),
   );
+
+  // Delete a subscription. Confirm first (it's destructive), then delete in the
+  // DB and drop the row from local state so it vanishes immediately — no need to
+  // re-fetch the whole list. If the delete fails, re-fetch to resync the UI.
+  function handleDelete(item: Subscription) {
+    Alert.alert("Delete subscription", `Remove "${item.name}"?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          const { error } = await deleteSubscription(item.id);
+          if (error) {
+            const { data } = await listSubscriptions();
+            if (data) setSubs(data);
+            return;
+          }
+          setSubs((prev) => prev.filter((s) => s.id !== item.id));
+        },
+      },
+    ]);
+  }
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -80,7 +102,19 @@ export default function Home() {
                   Renews {formatDate(item.next_renewal_date)}
                 </Text>
               </View>
-              <Text style={styles.cardCost}>{formatCost(item.cost)}</Text>
+              {/* Right column: (–) delete button on top, cost beneath it. */}
+              <View style={styles.cardRight}>
+                <Pressable
+                  style={styles.deleteButton}
+                  onPress={() => handleDelete(item)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Delete ${item.name}`}
+                >
+                  <Text style={styles.deleteButtonText}>–</Text>
+                </Pressable>
+                <Text style={styles.cardCost}>{formatCost(item.cost)}</Text>
+              </View>
             </View>
           )}
         />
@@ -131,7 +165,7 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: 24, paddingBottom: 96, flexGrow: 1 },
   card: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
     backgroundColor: C.field,
     borderRadius: 14,
@@ -143,6 +177,19 @@ const styles = StyleSheet.create({
   cardMain: { flex: 1, gap: 4 },
   cardName: { fontFamily: Font.sans, fontSize: 16, fontWeight: "600", color: C.ink },
   cardDate: { fontFamily: Font.sans, fontSize: 13, color: C.sage },
+
+  // Right column of a card: delete button stacked above the cost, right-aligned.
+  cardRight: { alignItems: "flex-end", gap: 10 },
+  deleteButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.line,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  deleteButtonText: { fontSize: 18, fontWeight: "700", color: C.danger, marginTop: -2 },
   cardCost: { fontFamily: Font.rounded, fontSize: 17, fontWeight: "700", color: C.brand },
 
   addButton: {
