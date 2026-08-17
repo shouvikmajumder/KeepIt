@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { C, Font } from "@/lib/theme";
 
 /**
  * Shared building blocks for the auth screens (sign up + log in).
@@ -17,22 +18,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
  * KeepIt. Both auth screens share it so they read as one product.
  */
 
-export const C = {
-  surface: "#F6F4EF", // warm paper
-  ink: "#182A24", // evergreen-black text
-  brand: "#1E4E3C", // evergreen — CTA + cycle ring
-  brandPressed: "#163C2F",
-  sage: "#6B7A72", // labels + secondary text
-  line: "#E2DED4", // hairlines
-  field: "#FFFFFF",
-  accent: "#E5A83C", // amber — used only on the cycle
-  danger: "#B4462F",
-} as const;
-
-export const Font = Platform.select({
-  ios: { rounded: "ui-rounded", sans: "system-ui", mono: "ui-monospace" },
-  default: { rounded: "sans-serif", sans: "sans-serif", mono: "monospace" },
-})!;
+// The visual tokens now live in @/lib/theme so app screens can share them too.
+// Re-exported here so existing `import { C, Font } from ".../auth-ui"` keeps working.
+export { C, Font };
 
 /** Wraps a screen: keyboard handling, scroll, safe-area padding, and the KeepIt header. */
 export function AuthScaffold({ children }: { children: React.ReactNode }) {
