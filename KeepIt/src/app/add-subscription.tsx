@@ -57,7 +57,8 @@ export default function AddSubscription() {
           <Text style={styles.cancel}>Cancel</Text>
         </Pressable>
         <Text style={styles.title}>New subscription</Text>
-        <View style={{ width: 52 }} /> {/* spacer to keep the title centered */}
+        {/* Spacer matching the Cancel width, so the title stays centered. */}
+        <View style={{ width: 52 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
