@@ -1,0 +1,7 @@
+# KeepIt FastAPI backend dependencies.
+# Install into a virtualenv:  pip install -r requirements.txt
+fastapi==0.118.0
+uvicorn[standard]==0.37.0
+supabase==2.31.0          # service-role access to Postgres via PostgREST
+pyjwt[crypto]==2.13.0     # verify the Supabase access-token (JWT)
+pydantic-settings==2.11.0 # load config from backend/.env

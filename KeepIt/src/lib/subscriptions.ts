@@ -1,12 +1,15 @@
-import { supabase } from "@/lib/supabase";
+import { apiFetch } from "@/lib/api";
 
 /**
- * Data-access layer for the `subscriptions` table (see supabase/schema.sql).
+ * Data-access layer for subscriptions.
  *
- * Every function here goes through the shared `supabase` client, so each request
- * carries the signed-in user's JWT. That's what lets Row Level Security scope
- * things automatically: the queries below never mention user_id, yet the
- * database only ever returns / accepts the current user's rows.
+ * These used to hit Supabase directly; now they go through our FastAPI backend
+ * (see backend/). `apiFetch` attaches the signed-in user's access-token, and the
+ * backend verifies it and scopes every query to that user — so, like before,
+ * these calls never mention user_id and only ever touch the current user's rows.
+ *
+ * Every function returns `{ data, error }` where `error` is a string message
+ * (or null on success), matching what `apiFetch` returns.
  */
 
 /** One subscription row, exactly as the app reads it back. */
@@ -18,39 +21,27 @@ export type Subscription = {
   created_at: string;
 };
 
-/** The fields the user actually types in — everything else the DB fills in. */
+/** The fields the user actually types in — everything else the backend fills in. */
 export type NewSubscription = {
   name: string;
   cost: number;
   next_renewal_date: string;
 };
 
-/**
- * Fetches the current user's subscriptions, soonest renewal first. RLS limits
- * the rows to this user, so there's no `where user_id = ...` here on purpose.
- */
+/** Fetches the current user's subscriptions, soonest renewal first. */
 export async function listSubscriptions() {
-  return supabase
-    .from("subscriptions")
-    .select("id, name, cost, next_renewal_date, created_at")
-    .order("next_renewal_date", { ascending: true })
-    .returns<Subscription[]>();
+  return apiFetch<Subscription[]>("/subscriptions");
 }
 
-/**
- * Inserts a new subscription for the current user. We deliberately don't send
- * `user_id`: the column defaults to auth.uid(), so Postgres stamps it from the
- * caller's session. `.select().single()` returns the created row back.
- */
+/** Creates a new subscription for the current user; returns the created row. */
 export async function addSubscription(input: NewSubscription) {
-  return supabase
-    .from("subscriptions")
-    .insert(input)
-    .select("id, name, cost, next_renewal_date, created_at")
-    .single<Subscription>();
+  return apiFetch<Subscription>("/subscriptions", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
-/** Removes one of the current user's subscriptions by id (RLS blocks others'). */
+/** Removes one of the current user's subscriptions by id. */
 export async function deleteSubscription(id: string) {
-  return supabase.from("subscriptions").delete().eq("id", id);
+  return apiFetch<null>(`/subscriptions/${id}`, { method: "DELETE" });
 }

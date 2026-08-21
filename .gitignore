@@ -1,1 +1,8 @@
+# Secrets — matches .env at any depth (e.g. Backend/.env, KeepIt/.env).
 .env
+
+# Python (Backend/) — the virtualenv self-ignores via .venv/.gitignore,
+# but these catch compiled files and any stray venv.
+.venv/
+__pycache__/
+*.pyc

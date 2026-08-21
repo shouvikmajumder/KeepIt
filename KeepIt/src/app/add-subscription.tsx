@@ -43,7 +43,7 @@ export default function AddSubscription() {
     setSaving(false);
 
     if (error) {
-      setError(error.message);
+      setError(error);
       return;
     }
     router.back(); // back to the list
