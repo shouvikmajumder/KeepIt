@@ -9,7 +9,7 @@ code changes). Interactive docs live at http://localhost:8000/docs.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import subscriptions, dashboard, plaid_link
+from .routers import subscriptions, dashboard, plaid_link, plaid_webhook
 from .plaid_client import PlaidError
 from fastapi.responses import JSONResponse
 from .config import settings
@@ -36,6 +36,7 @@ def health():
 app.include_router(subscriptions.router)
 app.include_router(dashboard.router)
 app.include_router(plaid_link.router)
+app.include_router(plaid_webhook.router)
 
 
 @app.exception_handler(PlaidError)
