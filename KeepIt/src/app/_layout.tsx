@@ -30,6 +30,7 @@ function RootNavigator() {
         <Stack.Screen name="add-subscription" options={{ presentation: "modal" }} />
         <Stack.Screen name="manual-subscription" />
         <Stack.Screen name="subscription-details" />
+        <Stack.Screen name="connections" />
       </Stack.Protected>
 
       <Stack.Protected guard={!session}>
