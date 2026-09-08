@@ -11,7 +11,9 @@ router = APIRouter()
 def delete_auth_user(user_id):
     try:
         get_supabase().auth.admin.delete_user(user_id)
-    except Exception:
+    except Exception as exc:
+        if getattr(exc, "code", None) == "user_not_found" or getattr(exc, "status", None) == 404:
+            return  # A retried deletion of an already-deleted account has succeeded.
         raise HTTPException(503, "Account deletion did not finish. Please retry.") from None
 
 

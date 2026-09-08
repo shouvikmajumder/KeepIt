@@ -1,10 +1,14 @@
 import { Stack } from "expo-router";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { SessionProvider, useSession } from "@/lib/session";
 
 function RootNavigator() {
-  const { session, isLoading } = useSession();
+  const { session, isLoading, error, retry } = useSession();
+  if (error && !session) return <View style={{ flex: 1, justifyContent: "center", padding: 32 }}>
+    <Text accessibilityRole="alert">{error}</Text>
+    <Pressable accessibilityRole="button" onPress={retry} style={{ padding: 20 }}><Text>Retry</Text></Pressable>
+  </View>;
 
   // While we restore a saved session from storage, show a blank spinner so we
   // don't flash the login screen at a user who's actually already signed in.
