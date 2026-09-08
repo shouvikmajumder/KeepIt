@@ -55,7 +55,7 @@ export async function deleteSubscription(id: string) {
 }
 
 export function updateSubscription(id: string, input: NewSubscription & { status: Subscription["status"] }) {
-  return apiFetch<Subscription>(`/subscriptions/${id}`, { method: "PATCH", body: JSON.stringify(input) });
+  return apiFetch<Subscription>(`/subscriptions/${id}?today=${localDate()}`, { method: "PATCH", body: JSON.stringify(input) });
 }
 
 export type Dashboard = { monthly_equivalent: string; active_count: number; upcoming: Subscription[] };

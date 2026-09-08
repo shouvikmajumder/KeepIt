@@ -14,7 +14,8 @@ from datetime import date
 from uuid import UUID
 
 from ..auth import get_current_user_id
-from ..db import get_supabase
+from psycopg import sql
+from psycopg.types.json import Jsonb
 from ..postgres import transaction
 from ..schemas import SubscriptionCreate, SubscriptionOut, SubscriptionUpdate
 from ..recurrence import project
@@ -60,24 +61,25 @@ def delete_subscription(sub_id: UUID, user_id: str = Depends(get_current_user_id
 
 @router.patch("/{sub_id}", response_model=SubscriptionOut)
 def update_subscription(sub_id: UUID, body: SubscriptionUpdate,
-                        user_id: str = Depends(get_current_user_id)):
-    table = get_supabase().table("subscriptions")
-    rows = table.select("*").eq("id", str(sub_id)).eq("user_id", user_id).execute().data
-    if not rows:
-        raise HTTPException(404, "Subscription not found")
-    previous = rows[0]
-    payload = body.model_dump(mode="json")
-    # Unchanged projected dates must not replace Jan 31's original anchor with Feb 28.
-    current = project(previous, date.today())
-    if payload["next_renewal_date"] != current["next_renewal_date"]:
-        payload["recurrence_anchor"] = payload["next_renewal_date"]
-    if previous["source"] == "plaid":
-        overrides = previous.get("user_overrides") or {}
-        for key, value in payload.items():
-            if str(value) != str(current.get(key)):
-                overrides[key] = value
-        payload["user_overrides"] = overrides
-    result = table.update(payload).eq("id", str(sub_id)).eq("user_id", user_id).execute()
-    if not result.data:
-        raise HTTPException(404, "Subscription not found")
-    return project(result.data[0], date.today())
+                        user_id: str = Depends(get_current_user_id), today: date = None):
+    with transaction() as db:
+        previous = db.execute("select * from public.subscriptions where id=%s and user_id=%s for update",
+                              (sub_id, user_id)).fetchone()
+        if not previous:
+            raise HTTPException(404, "Subscription not found")
+        payload = body.model_dump(mode="json")
+        # Locking prevents a provider refresh from overwriting edits mid-save.
+        current = project(previous, today or date.today())
+        if (payload["next_renewal_date"] != str(current["next_renewal_date"])
+                or payload["billing_interval"] != current["billing_interval"]):
+            payload["recurrence_anchor"] = payload["next_renewal_date"]
+        if previous["source"] == "plaid":
+            overrides = previous.get("user_overrides") or {}
+            for key, value in payload.items():
+                if str(value) != str(current.get(key)):
+                    overrides[key] = value
+            payload["user_overrides"] = Jsonb(overrides)
+        assignments = sql.SQL(",").join(sql.SQL("{}=%s").format(sql.Identifier(key)) for key in payload)
+        query = sql.SQL("update public.subscriptions set {} where id=%s and user_id=%s returning *").format(assignments)
+        result = db.execute(query, (*payload.values(), sub_id, user_id)).fetchone()
+        return project(result, today or date.today())
