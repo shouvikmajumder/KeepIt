@@ -9,7 +9,10 @@ code changes). Interactive docs live at http://localhost:8000/docs.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import subscriptions, dashboard
+from .routers import subscriptions, dashboard, plaid_link
+from .plaid_client import PlaidError
+from fastapi.responses import JSONResponse
+from .config import settings
 
 app = FastAPI(title="KeepIt API")
 
@@ -18,7 +21,7 @@ app = FastAPI(title="KeepIt API")
 # Tighten allow_origins to the real app origin before deploying.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -32,3 +35,9 @@ def health():
 
 app.include_router(subscriptions.router)
 app.include_router(dashboard.router)
+app.include_router(plaid_link.router)
+
+
+@app.exception_handler(PlaidError)
+async def plaid_error_handler(request, exc):
+    return JSONResponse(status_code=503, content={"detail": "Bank access is temporarily unavailable. Please retry."})
