@@ -1,6 +1,6 @@
 from hashlib import sha256
 from uuid import UUID
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from ..auth import get_current_user_id
 from ..config import settings
@@ -40,6 +40,8 @@ def exchange(body: ExchangeRequest, user_id: str = Depends(get_current_user_id))
     with transaction() as db:
         # Serialize this user's exchanges so a retried request reuses its result.
         db.execute("select pg_advisory_xact_lock(hashtextextended(%s, 0))", (user_id,))
+        if not db.execute("select id from auth.users where id=%s", (user_id,)).fetchone():
+            raise HTTPException(401, "Account no longer exists")
         existing = db.execute("select id from keepit_private.connections where exchange_hash=%s and user_id=%s",
                               (digest, user_id)).fetchone()
         if existing:
