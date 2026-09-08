@@ -13,7 +13,7 @@ from .routers import subscriptions, dashboard, plaid_link, plaid_webhook
 from .plaid_client import PlaidError
 from fastapi.responses import JSONResponse
 from .config import settings
-from .routers import connections, review, account
+from .routers import connections, review, account, readiness
 
 app = FastAPI(title="KeepIt API")
 
@@ -41,6 +41,7 @@ app.include_router(plaid_webhook.router)
 app.include_router(connections.router)
 app.include_router(review.router)
 app.include_router(account.router)
+app.include_router(readiness.router)
 
 
 @app.exception_handler(PlaidError)
