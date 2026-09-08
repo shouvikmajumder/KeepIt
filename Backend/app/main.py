@@ -9,7 +9,7 @@ code changes). Interactive docs live at http://localhost:8000/docs.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import subscriptions
+from .routers import subscriptions, dashboard
 
 app = FastAPI(title="KeepIt API")
 
@@ -31,3 +31,4 @@ def health():
 
 
 app.include_router(subscriptions.router)
+app.include_router(dashboard.router)
