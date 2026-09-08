@@ -23,6 +23,7 @@ function RootNavigator() {
     <Stack screenOptions={{ headerShown: false }}>
       {/* Always available: decides where to send the user based on session. */}
       <Stack.Screen name="index" />
+      <Stack.Screen name="auth-callback" />
 
       <Stack.Protected guard={!!session}>
         <Stack.Screen name="home" />
@@ -32,6 +33,7 @@ function RootNavigator() {
         <Stack.Screen name="subscription-details" />
         <Stack.Screen name="connections" />
         <Stack.Screen name="discoveries" />
+        <Stack.Screen name="reset-password" />
       </Stack.Protected>
 
       <Stack.Protected guard={!session}>
