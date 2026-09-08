@@ -1,11 +1,10 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
-import { supabase } from "@/lib/supabase";
 import { useSession } from "@/lib/session";
 import { C, Font } from "@/lib/theme";
-import { deleteSubscription, listSubscriptions, getDashboard, type Dashboard, type Subscription } from "@/lib/subscriptions";
+import { listSubscriptions, getDashboard, type Dashboard, type Subscription } from "@/lib/subscriptions";
 import { money } from "@/lib/dates";
 
 /**
@@ -48,28 +47,6 @@ export default function Home() {
       };
     }, [revision]),
   );
-
-  // Delete a subscription. Confirm first (it's destructive), then delete in the
-  // DB and drop the row from local state so it vanishes immediately — no need to
-  // re-fetch the whole list. If the delete fails, re-fetch to resync the UI.
-  function handleDelete(item: Subscription) {
-    Alert.alert("Delete subscription", `Remove "${item.name}"?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          const { error } = await deleteSubscription(item.id);
-          if (error) {
-            const { data } = await listSubscriptions();
-            if (data) setSubs(data);
-            return;
-          }
-          setSubs((prev) => prev.filter((s) => s.id !== item.id));
-        },
-      },
-    ]);
-  }
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -116,28 +93,20 @@ export default function Home() {
           }
           // One card per subscription: name, formatted cost, next renewal date.
           renderItem={({ item }) => (
-            <View style={styles.card}>
+            <Pressable style={styles.card} accessibilityRole="button"
+              onPress={() => router.push({ pathname: "/subscription-details", params: { id: item.id } })}>
               <View style={styles.cardMain}>
                 <Text style={styles.cardName}>{item.name}</Text>
                 <Text style={styles.cardDate}>
-                  Renews {formatDate(item.next_renewal_date)}
+                  Estimated {formatDate(item.next_renewal_date)} · {item.source === "plaid" ? "Connected" : "Manual"}
                 </Text>
               </View>
               {/* Right column: (–) delete button on top, cost beneath it. */}
               <View style={styles.cardRight}>
-                <Pressable
-                  style={styles.deleteButton}
-                  onPress={() => handleDelete(item)}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Delete ${item.name}`}
-                >
-                  <Text style={styles.deleteButtonText}>–</Text>
-                </Pressable>
                 <Text style={styles.cardCost}>{money(item.cost)}</Text>
                 <Text style={styles.cardDate}>{item.billing_interval} · {item.status}</Text>
               </View>
-            </View>
+            </Pressable>
           )}
         />
       )}
