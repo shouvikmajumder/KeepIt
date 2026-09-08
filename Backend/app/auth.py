@@ -13,6 +13,7 @@ one by the token's `kid` (so key rotation keeps working).
 """
 
 import jwt
+from uuid import UUID
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -43,6 +44,8 @@ def get_current_user_id(
             signing_key.key,
             algorithms=["ES256", "RS256"],
             audience="authenticated",
+            issuer=f"{settings.supabase_url}/auth/v1",
+            options={"require": ["exp", "iat", "sub", "iss", "aud"]},
         )
     except jwt.PyJWTError:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token")
@@ -50,4 +53,7 @@ def get_current_user_id(
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token missing subject")
-    return user_id
+    try:
+        return str(UUID(user_id))
+    except (ValueError, TypeError, AttributeError):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token subject")

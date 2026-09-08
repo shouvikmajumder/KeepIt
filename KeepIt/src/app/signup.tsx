@@ -47,7 +47,7 @@ export default function SignUp() {
     setSubmitting(true);
     // Supabase creates the account; username goes into user metadata (a DB
     // trigger can later copy it into public.profiles as the display name).
-    const { error, alreadyRegistered } = await signUpWithEmail(
+    const { data, error, alreadyRegistered } = await signUpWithEmail(
       username,
       email,
       password,
@@ -69,7 +69,10 @@ export default function SignUp() {
     }
     // Account created. If email confirmation is on they'll get a verification
     // email; send them to the login screen to continue.
-    router.replace("/login" as Href);
+    if (!data.session) {
+      Alert.alert("Check your email", "Open the confirmation link on this iPhone, then return to KeepIt.");
+      router.replace("/login" as Href);
+    }
   }
 
   return (

@@ -1,10 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 
 // Project URL + anon key come from the environment (.env). In Expo, only vars
 // prefixed with EXPO_PUBLIC_ are bundled into the app, so these are readable here.
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+export const authRedirect = process.env.EXPO_PUBLIC_AUTH_REDIRECT_URL || "keepit://auth-callback";
+const serverRendering = Platform.OS === "web" && typeof window === "undefined";
 
 // One shared client for the whole app. AsyncStorage persists the auth session
 // on-device so a signed-in user stays signed in across app launches. (We used
@@ -12,10 +15,12 @@ const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 // database under Expo Go; AsyncStorage is a rock-solid adapter that just works.)
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: AsyncStorage,
-    autoRefreshToken: true,
-    persistSession: true,
+    // Web export runs without a browser; it must not read on-device storage.
+    storage: serverRendering ? undefined : AsyncStorage,
+    autoRefreshToken: !serverRendering,
+    persistSession: !serverRendering,
     detectSessionInUrl: false,
+    flowType: "pkce",
   },
 });
 
@@ -55,7 +60,7 @@ export async function signUpWithEmail(
   const { data, error } = await supabase.auth.signUp({
     email: email.trim(),
     password,
-    options: { data: { display_name: username.trim() } },
+    options: { data: { display_name: username.trim() }, emailRedirectTo: authRedirect },
   });
 
   const alreadyRegistered =
