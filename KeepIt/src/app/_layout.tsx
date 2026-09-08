@@ -28,6 +28,7 @@ function RootNavigator() {
         <Stack.Screen name="home" />
         {/* Slides up as a modal over the list; only reachable when signed in. */}
         <Stack.Screen name="add-subscription" options={{ presentation: "modal" }} />
+        <Stack.Screen name="manual-subscription" />
       </Stack.Protected>
 
       <Stack.Protected guard={!session}>
