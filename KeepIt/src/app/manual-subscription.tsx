@@ -5,6 +5,8 @@ import { useRouter } from "expo-router";
 import { Field } from "@/components/auth-ui";
 import { C, Font } from "@/lib/theme";
 import { addSubscription } from "@/lib/subscriptions";
+import DateTimePicker from "@expo/ui/community/datetime-picker";
+import { localDate, parseDate } from "@/lib/dates";
 
 /**
  * Add-subscription screen. Collects the three fields the user types (name, cost,
@@ -18,7 +20,8 @@ export default function AddSubscription() {
   // and converted/validated at save time.
   const [name, setName] = useState("");
   const [cost, setCost] = useState("");
-  const [renewal, setRenewal] = useState("");
+  const [renewal, setRenewal] = useState(localDate());
+  const [interval, setInterval] = useState<"monthly" | "annual">("monthly");
 
   // `focused` drives the Field's green focus border; `error` shows a message;
   // `saving` disables the button while the insert is in flight.
@@ -30,14 +33,17 @@ export default function AddSubscription() {
     // Validate before touching the database, and surface the first problem found.
     const amount = Number(cost);
     if (!name.trim()) return setError("Give the subscription a name.");
-    if (!cost || Number.isNaN(amount) || amount <= 0) return setError("Enter a valid cost.");
+    if (!/^\d+(\.\d{1,2})?$/.test(cost) || !Number.isFinite(amount) || amount <= 0)
+      return setError("Enter a positive USD amount with up to two decimal places.");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(renewal)) return setError("Use the date format YYYY-MM-DD.");
 
     setError(null);
     setSaving(true);
     const { error } = await addSubscription({
       name: name.trim(),
-      cost: amount,
+      cost,
+      billing_interval: interval,
+      currency: "USD",
       next_renewal_date: renewal,
     });
     setSaving(false);
@@ -46,7 +52,7 @@ export default function AddSubscription() {
       setError(error);
       return;
     }
-    router.back(); // back to the list
+    router.dismissTo("/home");
   }
 
   return (
@@ -72,7 +78,7 @@ export default function AddSubscription() {
           onBlur={() => setFocused(null)}
         />
         <Field
-          label="Cost"
+          label="Cost (USD)"
           placeholder="0.00"
           keyboardType="decimal-pad"
           value={cost}
@@ -81,16 +87,19 @@ export default function AddSubscription() {
           onFocus={() => setFocused("cost")}
           onBlur={() => setFocused(null)}
         />
-        <Field
-          label="Next renewal date"
-          placeholder="YYYY-MM-DD"
-          autoCapitalize="none"
-          value={renewal}
-          onChangeText={setRenewal}
-          active={focused === "renewal"}
-          onFocus={() => setFocused("renewal")}
-          onBlur={() => setFocused(null)}
-        />
+        <View style={{ flexDirection: "row", gap: 12, marginBottom: 20 }}>
+          {(["monthly", "annual"] as const).map((value) => (
+            <Pressable key={value} accessibilityRole="radio" accessibilityState={{ checked: interval === value }}
+              onPress={() => setInterval(value)} style={{ padding: 14, borderRadius: 12,
+                backgroundColor: interval === value ? C.brand : C.line }}>
+              <Text style={{ color: interval === value ? C.surface : C.ink }}>{value === "monthly" ? "Monthly" : "Annual"}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <Text style={{ color: C.ink, marginBottom: 8 }}>Next renewal (estimate)</Text>
+        <DateTimePicker value={parseDate(renewal)} mode="date" minimumDate={new Date(2000, 0, 1)}
+          maximumDate={new Date(2100, 11, 31)} onChange={(_, value) => value && setRenewal(localDate(value))} />
+        <Text style={{ color: C.sage, marginVertical: 16 }}>KeepIt tracks your subscription. It does not charge or cancel it.</Text>
 
         {!!error && <Text style={styles.error}>{error}</Text>}
 
