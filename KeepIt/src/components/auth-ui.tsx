@@ -91,6 +91,7 @@ export function Field({
         ]}
       >
         <TextInput
+          accessibilityLabel={label}
           style={[styles.input, style]}
           placeholderTextColor={C.sage}
           selectionColor={C.brand}
