@@ -37,6 +37,7 @@ function RootNavigator() {
       <Stack.Protected guard={!session}>
         <Stack.Screen name="login" />
         <Stack.Screen name="signup" />
+        <Stack.Screen name="forgot-password" />
       </Stack.Protected>
     </Stack>
   );

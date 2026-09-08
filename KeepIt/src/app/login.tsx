@@ -1,4 +1,4 @@
-import { Link, type Href } from "expo-router";
+import { Link, useRouter, type Href } from "expo-router";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { AuthScaffold, Field, styles } from "@/components/auth-ui";
@@ -14,6 +14,7 @@ import { signInWithEmail } from "@/lib/supabase";
 type Errors = Partial<Record<"email" | "password", string>>;
 
 export default function Login() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -93,7 +94,7 @@ export default function Login() {
           }
         />
 
-        <Pressable hitSlop={8} style={styles.forgot} accessibilityRole="button">
+        <Pressable onPress={() => router.push("/forgot-password")} hitSlop={8} style={styles.forgot} accessibilityRole="button">
           <Text style={styles.forgotText}>Forgot password?</Text>
         </Pressable>
 
