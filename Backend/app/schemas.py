@@ -6,16 +6,28 @@ serialize rows back out (dates become ISO strings, matching what the app reads).
 """
 
 from datetime import date, datetime
+from decimal import Decimal
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class SubscriptionCreate(BaseModel):
     """The fields the user types in; user_id/id/created_at are set server-side."""
 
-    name: str = Field(min_length=1)
-    cost: float = Field(gt=0)
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    name: str = Field(min_length=1, max_length=120)
+    cost: Decimal = Field(gt=0, max_digits=10, decimal_places=2)
     next_renewal_date: date
+    billing_interval: Literal["monthly", "annual"] = "monthly"
+    currency: Literal["USD"] = "USD"
+
+    @field_validator("next_renewal_date")
+    @classmethod
+    def supported_date(cls, value: date) -> date:
+        if not 2000 <= value.year <= 2100:
+            raise ValueError("Choose a date between 2000 and 2100")
+        return value
 
 
 class SubscriptionOut(BaseModel):
@@ -23,6 +35,16 @@ class SubscriptionOut(BaseModel):
 
     id: str
     name: str
-    cost: float
+    cost: Decimal
     next_renewal_date: date
     created_at: datetime
+    billing_interval: Literal["monthly", "annual"]
+    currency: Literal["USD"]
+    status: Literal["active", "inactive"]
+    source: Literal["manual", "plaid"]
+    recurrence_anchor: date
+
+
+class SubscriptionUpdate(SubscriptionCreate):
+    # Send a complete editable form; ownership and provider fields stay server-side.
+    status: Literal["active", "inactive"] = "active"
