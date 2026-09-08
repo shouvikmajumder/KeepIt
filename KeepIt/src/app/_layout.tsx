@@ -34,6 +34,7 @@ function RootNavigator() {
         <Stack.Screen name="connections" />
         <Stack.Screen name="discoveries" />
         <Stack.Screen name="reset-password" />
+        <Stack.Screen name="settings" />
       </Stack.Protected>
 
       <Stack.Protected guard={!session}>
