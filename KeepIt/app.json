@@ -6,8 +6,9 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "keepit",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "ios": {
+      "bundleIdentifier": "com.shouvikmajumder.keepit",
       "icon": "./assets/expo.icon"
     },
     "android": {
@@ -28,7 +29,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#F6F4EF",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
