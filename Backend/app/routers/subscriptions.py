@@ -55,6 +55,10 @@ def delete_subscription(sub_id: UUID, user_id: str = Depends(get_current_user_id
     """Delete one of this user's subscriptions. The user_id filter means a
     caller can't delete a row that isn't theirs (it simply matches nothing)."""
     with transaction() as db:
+        connection = db.execute("select connection_id from public.subscriptions where id=%s and user_id=%s", (sub_id, user_id)).fetchone()
+        if connection and connection["connection_id"]:
+            # Match the worker's lock order before deleting its linked candidate reference.
+            db.execute("select id from keepit_private.connections where id=%s for update", (connection["connection_id"],))
         db.execute("delete from public.subscriptions where id=%s and user_id=%s", (sub_id, user_id))
     return None
 

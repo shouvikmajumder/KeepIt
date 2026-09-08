@@ -9,7 +9,7 @@ from .config import settings
 @contextmanager
 def transaction():
     if not settings.database_url:
-        raise HTTPException(503, "Bank connections are not configured yet.")
+        raise HTTPException(503, "The tracking database is not configured yet.")
     with psycopg.connect(settings.database_url, row_factory=dict_row, connect_timeout=10) as conn:
         yield conn
 
