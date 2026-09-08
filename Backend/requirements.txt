@@ -5,3 +5,5 @@ uvicorn[standard]==0.37.0
 supabase==2.31.0          # service-role access to Postgres via PostgREST
 pyjwt[crypto]==2.13.0     # verify the Supabase access-token (JWT)
 pydantic-settings==2.11.0 # load config from backend/.env
+psycopg[binary]==3.3.3   # transactions, row locks, and durable worker jobs
+httpx==0.28.1           # bounded server-to-server requests to Plaid
