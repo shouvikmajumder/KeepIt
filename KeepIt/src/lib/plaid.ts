@@ -14,6 +14,7 @@ export async function connectBank(connectionId?: string): Promise<boolean> {
   return new Promise((resolve, reject) => {
     sdk.createPlaidLinkSession({
       token: token.data!.link_token,
+      onEvent: () => {}, // Do not log provider events containing account metadata.
       onSuccess: async success => {
         try {
           if (!connectionId && !success.publicToken) throw new Error("No account was connected. Please try again.");

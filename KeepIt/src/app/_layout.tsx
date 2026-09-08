@@ -31,6 +31,7 @@ function RootNavigator() {
         <Stack.Screen name="manual-subscription" />
         <Stack.Screen name="subscription-details" />
         <Stack.Screen name="connections" />
+        <Stack.Screen name="discoveries" />
       </Stack.Protected>
 
       <Stack.Protected guard={!session}>
