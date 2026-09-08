@@ -8,6 +8,7 @@ serialize rows back out (dates become ISO strings, matching what the app reads).
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -33,7 +34,7 @@ class SubscriptionCreate(BaseModel):
 class SubscriptionOut(BaseModel):
     """One subscription row, exactly as the app reads it back."""
 
-    id: str
+    id: UUID
     name: str
     cost: Decimal
     next_renewal_date: date

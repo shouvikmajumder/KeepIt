@@ -15,6 +15,7 @@ from uuid import UUID
 
 from ..auth import get_current_user_id
 from ..db import get_supabase
+from ..postgres import transaction
 from ..schemas import SubscriptionCreate, SubscriptionOut, SubscriptionUpdate
 from ..recurrence import project
 
@@ -27,15 +28,9 @@ _COLUMNS = "id,name,cost,next_renewal_date,created_at,billing_interval,currency,
 @router.get("", response_model=list[SubscriptionOut])
 def list_subscriptions(user_id: str = Depends(get_current_user_id), today: date = None):
     """This user's subscriptions, soonest renewal first."""
-    res = (
-        get_supabase()
-        .table("subscriptions")
-        .select(_COLUMNS)
-        .eq("user_id", user_id)
-        .order("next_renewal_date")
-        .execute()
-    )
-    rows = [project(row, today or date.today()) for row in res.data]
+    with transaction() as db:
+        records = db.execute(f"select {_COLUMNS} from public.subscriptions where user_id=%s", (user_id,)).fetchall()
+    rows = [project(row, today or date.today()) for row in records]
     return sorted(rows, key=lambda row: (row["status"] != "active", row["next_renewal_date"]))
 
 
@@ -44,30 +39,22 @@ def create_subscription(
     body: SubscriptionCreate, user_id: str = Depends(get_current_user_id)
 ):
     """Insert a subscription for this user and return the created row."""
-    payload = {
-        "name": body.name,
-        "cost": str(body.cost),
-        "billing_interval": body.billing_interval,
-        "currency": body.currency,
-        "recurrence_anchor": body.next_renewal_date.isoformat(),
-        # date -> "YYYY-MM-DD" string for JSON transport.
-        "next_renewal_date": body.next_renewal_date.isoformat(),
-        # Stamp the owner ourselves — never trust a user_id from the client.
-        "user_id": user_id,
-    }
-    res = get_supabase().table("subscriptions").insert(payload).execute()
-    if not res.data:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Insert failed")
-    return res.data[0]
+    with transaction() as db:
+        # Owner comes from the verified session, never the request body.
+        return db.execute(f"""insert into public.subscriptions
+            (user_id,name,cost,billing_interval,currency,recurrence_anchor,next_renewal_date)
+            values (%s,%s,%s,%s,%s,%s,%s) returning {_COLUMNS}""",
+            (user_id, body.name, body.cost, body.billing_interval, body.currency,
+             body.next_renewal_date, body.next_renewal_date)).fetchone()
+
 
 
 @router.delete("/{sub_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_subscription(sub_id: UUID, user_id: str = Depends(get_current_user_id)):
     """Delete one of this user's subscriptions. The user_id filter means a
     caller can't delete a row that isn't theirs (it simply matches nothing)."""
-    get_supabase().table("subscriptions").delete().eq("id", str(sub_id)).eq(
-        "user_id", user_id
-    ).execute()
+    with transaction() as db:
+        db.execute("delete from public.subscriptions where id=%s and user_id=%s", (sub_id, user_id))
     return None
 
 
