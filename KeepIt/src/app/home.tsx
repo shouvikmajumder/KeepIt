@@ -5,7 +5,8 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/lib/session";
 import { C, Font } from "@/lib/theme";
-import { deleteSubscription, listSubscriptions, type Subscription } from "@/lib/subscriptions";
+import { deleteSubscription, listSubscriptions, getDashboard, type Dashboard, type Subscription } from "@/lib/subscriptions";
+import { money } from "@/lib/dates";
 
 /**
  * KeepIt — home. The main signed-in screen: a list of the user's subscriptions
@@ -21,6 +22,10 @@ export default function Home() {
   // returns, so we can show a spinner instead of a misleading "empty" message.
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<Dashboard | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [revision, setRevision] = useState(0);
 
   // Re-run every time this screen gains focus (including when the user returns
   // from the Add screen), so a newly created subscription appears without any
@@ -30,15 +35,18 @@ export default function Home() {
       // `active` guards against updating state after the screen has unmounted.
       let active = true;
       (async () => {
-        const { data, error } = await listSubscriptions();
+        const [{ data, error }, dashboard] = await Promise.all([listSubscriptions(), getDashboard()]);
         if (!active) return;
         if (!error && data) setSubs(data);
+        setError(error || dashboard.error);
+        if (dashboard.data) setSummary(dashboard.data);
         setLoading(false);
+        setRefreshing(false);
       })();
       return () => {
         active = false;
       };
-    }, []),
+    }, [revision]),
   );
 
   // Delete a subscription. Confirm first (it's destructive), then delete in the
@@ -69,10 +77,21 @@ export default function Home() {
           the session; the auth guard then routes back to login automatically. */}
       <View style={styles.header}>
         <Text style={styles.greeting}>Hi, {username}</Text>
-        <Pressable onPress={() => supabase.auth.signOut()} hitSlop={8}>
-          <Text style={styles.signOut}>Sign out</Text>
+        <Pressable onPress={() => router.push("/settings")} style={{ minHeight: 44, justifyContent: "center" }}>
+          <Text style={styles.signOut}>Settings</Text>
         </Pressable>
       </View>
+      {summary && <View style={{ paddingHorizontal: 24, paddingBottom: 20 }}>
+        <Text style={styles.cardDate}>Monthly equivalent · USD</Text>
+        <Text style={[styles.greeting, { fontSize: 36 }]}>{money(summary.monthly_equivalent)}</Text>
+        <Text style={styles.cardDate}>{summary.active_count} active · Annual charges spread over 12 months</Text>
+        {!!summary.upcoming.length && <Text style={styles.cardDate}>
+          Next: {summary.upcoming[0].name} · {formatDate(summary.upcoming[0].next_renewal_date)} (estimate)
+        </Text>}
+      </View>}
+      {!!error && <Pressable accessibilityRole="button" onPress={() => setRevision(v => v + 1)} style={{ padding: 24 }}>
+        <Text style={{ color: C.danger }}>{error} Tap to retry.</Text>
+      </Pressable>}
 
       {loading ? (
         // First load: a centered spinner.
@@ -82,10 +101,12 @@ export default function Home() {
       ) : (
         <FlatList
           data={subs}
+          refreshing={refreshing}
+          onRefresh={() => { setRefreshing(true); setRevision(v => v + 1); }}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           // Shown when the user has no subscriptions yet.
-          ListEmptyComponent={
+          ListEmptyComponent={error ? null :
             <View style={styles.centered}>
               <Text style={styles.emptyTitle}>No subscriptions yet</Text>
               <Text style={styles.emptyBody}>
@@ -113,7 +134,8 @@ export default function Home() {
                 >
                   <Text style={styles.deleteButtonText}>–</Text>
                 </Pressable>
-                <Text style={styles.cardCost}>{formatCost(item.cost)}</Text>
+                <Text style={styles.cardCost}>{money(item.cost)}</Text>
+                <Text style={styles.cardDate}>{item.billing_interval} · {item.status}</Text>
               </View>
             </View>
           )}
