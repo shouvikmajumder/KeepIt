@@ -1,44 +1,75 @@
 # KeepIt
 
-iPhone-first subscription tracking with manual entry and reviewed Plaid discovery.
-The Expo app uses Supabase Auth and a Python/FastAPI service backed by Supabase PostgreSQL.
+A desktop web app for tracking subscriptions, monthly-equivalent spending, and estimated renewals.
+React + TypeScript + Vite power the frontend; FastAPI and Supabase PostgreSQL power the API.
+Supabase handles email/password authentication. Tracking data is accessible through the API only.
 
-## Local setup
+## Run the MVP locally
 
-1. Use Node 24 and Python 3.13. Install `KeepIt` dependencies with `npm ci`.
-2. Install `Backend/requirements.txt` in a virtual environment.
-3. Copy both `.env.example` files to `.env` and supply your own configuration.
-4. On a new Supabase project, run `KeepIt/supabase/schema.sql` first. On an existing project, preserve that table.
-5. Apply `KeepIt/supabase/migrations/*.sql` once, in numeric order, after backing up existing data.
-6. From `Backend`, run `uvicorn app.main:app --host 0.0.0.0 --port 8000`.
-7. From `Backend`, separately run `python -m app.worker` when Plaid is configured.
-8. From `KeepIt`, run `npx expo run:ios` to include native Plaid code. Expo Go supports manual tracking only.
+Requirements: Node 20.20.1 or a compatible newer LTS release, Python 3.13, and the existing Supabase project.
 
-`DATABASE_URL` is now required for all tracking endpoints. Use the direct or session-pooler URL;
-the transaction pooler is incompatible with the session lock used during account deletion.
-Use your computer's LAN address for `EXPO_PUBLIC_API_URL` when testing on a physical iPhone.
-Never put database, Plaid, encryption, or Supabase service-role secrets in `EXPO_PUBLIC_*` variables.
+1. In `Web`, run `npm ci` and copy `.env.example` to `.env` if it does not already exist.
+2. In `Backend`, create `.venv` with `python3 -m venv .venv`, then run `.venv/bin/pip install -r requirements.txt`.
+3. Configure `Backend/.env` with `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `DATABASE_URL`.
+4. Configure `Web/.env` with the same project's public URL/key and `VITE_API_URL=http://localhost:8000`.
+5. Inspect the tracking schema using `.venv/bin/python scripts/configure_tracking.py` from `Backend`.
+6. Run `./start-dev.sh` from the repository root, then open **http://localhost:5173**. Ctrl-C stops both processes.
 
-## What is included
+To run each process separately:
 
-- Monthly/annual USD subscriptions, editing, inactive status, and date-aware renewal estimates.
-- Monthly-equivalent spending and upcoming renewals; estimates do not confirm payment.
-- Two Add Subscription choices: manual entry or native bank/card linking.
-- Recurring-payment review, ignoring, matching existing records, and preserving user edits.
-- Verified webhooks, persistent jobs, retries, reconnects, and disconnects that retain manual records.
-- Email confirmation, password recovery, session restoration, and account deletion.
+```sh
+# Terminal 1, from Backend/
+.venv/bin/uvicorn app.main:app --reload --host 127.0.0.1 --port 8000 --no-access-log
+
+# Terminal 2, from Web/
+npm run dev
+```
+
+Keep the browser origin consistent: use localhost:5173 for signup and open its email links in the same browser.
+Supabase's redirect allowlist must include `http://localhost:5173/auth-callback` and
+`http://localhost:5173/auth-callback?flow=recovery`. If using 127.0.0.1:5173, add its two equivalents too.
+Enable email/password authentication and asymmetric JWT signing (ES256 or RS256).
+Redirect configuration is a Supabase dashboard setting; a service-role key cannot change it.
+
+## Database
+
+SQL lives in `Backend/supabase/`. On a **new** database, run `schema.sql` before migrations 001–003.
+On the existing database, do not rerun the baseline or previously applied migrations.
+
+The inspection helper recognizes the existing baseline and complete migration states. Run it with `--apply`
+to create a protected local recovery snapshot of public.subscriptions and apply missing migrations in one
+transaction. It checks that original subscription fields and existing Auth user IDs are preserved.
+Snapshots are in ignored `.local/backups/`; they are tracking-table snapshots, not full Supabase backups.
+Partial migration states require manual inspection. Migration 001 rejects nonpositive existing costs.
+
+Use a direct or **session-pooler** PostgreSQL URL, with SSL enabled for hosted databases. Transaction pooling
+is incompatible with account deletion's session lock. Percent-encode reserved password characters in the URL.
+The database password is different from the public key and service-role key.
+
+## Current scope
+
+- Signup, login, email confirmation, password recovery, persistent browser sessions, and sign-out.
+- Add, edit, deactivate, and remove monthly/annual USD subscriptions.
+- Monthly-equivalent spending and upcoming renewal estimates.
+- Account deletion, including revocation of any previously connected bank access.
+- Dark desktop UI with keyboard-accessible forms and confirmation dialogs.
+
+Bank linking and discovery are not exposed in this MVP. Their backend endpoints, encrypted-token storage,
+and worker remain available for a later browser integration. Manual tracking does not require Plaid keys,
+a webhook, or the worker. Tracking does not charge or cancel subscriptions with providers.
 
 ## Validation
 
-Run `npx tsc --noEmit` in `KeepIt`. Export with `npx expo export --platform ios` or `--platform web`.
-Run `python -m unittest discover -s tests -v` in `Backend`.
-Database tests require `KEEPIT_TEST_DATABASE_URL` pointing to a **disposable** PostgreSQL database
-whose name starts with `keepit_test`. They reset test schemas. Never use your app database.
-Without that variable, database cases are skipped; security and calendar tests still run.
+From `Web`, run `npm run build` and `npm test`. Browser tests use installed Google Chrome, an isolated
+server on port 5174, dummy credentials, and mocked APIs; they do not reach the real database.
 
-## Release preparation
+From `Backend`, run `.venv/bin/python -m unittest discover -s tests -v`.
+Database integration tests only run when `KEEPIT_TEST_DATABASE_URL` points to a disposable PostgreSQL
+database named keepit_test*. They reset its schemas. Never use the existing app database for them.
 
-See [the release checklist](docs/release.md) for Plaid access, OAuth, email redirects, deployment,
-monitoring, and device acceptance checks. No backend deployment or app submission is automatic.
-Local commits can be checked with `git log --oneline`; `scripts/commit-small.sh` refuses staged
-changes over 100 added/deleted lines. Stage explicit files and inspect their diff before using it.
+For an intentional live smoke check, run `.venv/bin/python scripts/smoke_tracking.py --run --browser`
+from `Backend` while the local app/API are running. This creates two temporary confirmed test users,
+sends no emails, verifies real login/tracking/user isolation, and deletes only the users it created.
+It requires Google Chrome and does not verify email delivery or the dashboard redirect allowlist.
+
+See [release notes](docs/release.md) for the future hosted-web milestone.

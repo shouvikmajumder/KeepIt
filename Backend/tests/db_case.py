@@ -31,7 +31,7 @@ class DatabaseCase(unittest.TestCase):
             for role in ("anon", "authenticated"):
                 if not db.execute("select 1 from pg_roles where rolname=%s", (role,)).fetchone():
                     db.execute(psycopg.sql.SQL("create role {}").format(psycopg.sql.Identifier(role)))
-            root = Path(__file__).resolve().parents[2] / "KeepIt" / "supabase"
+            root = Path(__file__).resolve().parents[1] / "supabase"
             db.execute((root / "schema.sql").read_text())
             for migration in sorted((root / "migrations").glob("*.sql")):
                 db.execute(migration.read_text())

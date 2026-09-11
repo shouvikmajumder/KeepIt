@@ -1,47 +1,50 @@
-# KeepIt API (FastAPI)
+# KeepIt API
 
-Backend for the KeepIt app. It serves the user's subscription data. **Auth
-stays on the frontend** (Supabase); this service only trusts the access-token
-the app sends and scopes every query to that user.
+FastAPI service for the KeepIt web app. Authenticated routes verify Supabase JWTs through JWKS.
+Tracking uses DATABASE_URL through psycopg, and every user operation is scoped to its verified owner.
+The Supabase service-role client is used for account administration and stays server-only.
 
-## What it does
+## Local setup
 
-- Verifies the Supabase access-token (JWT, ES256 via the project's JWKS) on each request.
-- Reads/writes the `subscriptions` table using the Supabase **service_role**
-  key, always filtered by the authenticated `user_id`.
+```sh
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+# Copy .env.example to .env only if .env does not already exist, then configure it.
+.venv/bin/python scripts/configure_tracking.py
+.venv/bin/uvicorn app.main:app --reload --host 127.0.0.1 --port 8000 --no-access-log
+```
+
+Required settings: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and DATABASE_URL.
+Use the existing project's direct/session-pooler PostgreSQL URL; encode password characters and enable SSL.
+ALLOWED_ORIGINS defaults to the local web app's localhost and 127.0.0.1 origins on port 5173.
+
+supabase/schema.sql is for new databases only. Migrations 001–003 extend existing tracking tables.
+scripts/configure_tracking.py --apply snapshots the subscriptions table and applies recognized missing
+migrations atomically. See the root README for its scope and preservation checks.
 
 ## Endpoints
 
-| Method | Path                  | Description                          |
-| ------ | --------------------- | ------------------------------------ |
-| GET    | `/health`             | Liveness check (no auth)             |
-| GET    | `/subscriptions`      | List the user's subs (soonest first) |
-| POST   | `/subscriptions`      | Create a sub, returns the new row    |
-| DELETE | `/subscriptions/{id}` | Delete one of the user's subs        |
+| Endpoint | Purpose |
+| --- | --- |
+| GET /health | Process liveness |
+| GET /ready | Database/schema readiness |
+| GET/POST /subscriptions | List/create subscriptions |
+| PATCH/DELETE /subscriptions/{id} | Update/remove a subscription |
+| GET /dashboard | Monthly equivalent and upcoming renewals |
+| DELETE /account | Revoke existing bank access and delete the account |
 
-## Run locally
+Interactive API documentation is at http://localhost:8000/docs.
+The existing Plaid, connections, review, and webhook routes are retained for a later web release.
+Do not start python -m app.worker for manual-only development; it requires all Plaid settings.
 
-```bash
-cd Backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+## Tests
 
-cp .env.example .env      # then fill in the three values from Supabase
-
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```sh
+.venv/bin/python -m unittest discover -s tests -v
 ```
 
-Open http://localhost:8000/docs for interactive API docs.
+Integration tests require KEEPIT_TEST_DATABASE_URL pointing to a disposable database named keepit_test*.
+They reset schemas and must never target the app database. Without it, those classes are skipped.
 
-## Config (`Backend/.env`)
-
-| Variable                     | Where to find it (Supabase dashboard)          |
-| ---------------------------- | ---------------------------------------------- |
-| `SUPABASE_URL`               | Settings → API → Project URL                   |
-| `SUPABASE_SERVICE_ROLE_KEY`  | Settings → API → Project API keys → service_role |
-
-Access-tokens are verified against the project's JWKS endpoint (asymmetric
-ES256 keys derived from `SUPABASE_URL`), so no JWT secret is required.
-
-`.env` is git-ignored — never commit the service_role key.
+scripts/smoke_tracking.py --run intentionally tests the configured database with temporary users and
+cleans up only those users. Add --browser to exercise the running web app in Google Chrome too.
