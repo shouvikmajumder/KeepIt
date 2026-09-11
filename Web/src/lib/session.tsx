@@ -1,10 +1,20 @@
-import { createContext, useContext, useEffect, useState } from 'react';
-import type { PropsWithChildren } from 'react';
-import type { Session } from '@supabase/supabase-js';
-import { supabase } from './supabase';
+import { createContext, useContext, useEffect, useState } from "react";
+import type { PropsWithChildren } from "react";
+import type { Session } from "@supabase/supabase-js";
+import { supabase } from "./supabase";
 
-type AuthState = { session: Session | null; loading: boolean; error: string | null; retry: () => void };
-const AuthContext = createContext<AuthState>({ session: null, loading: true, error: null, retry() {} });
+type AuthState = {
+  session: Session | null;
+  loading: boolean;
+  error: string | null;
+  retry: () => void;
+};
+const AuthContext = createContext<AuthState>({
+  session: null,
+  loading: true,
+  error: null,
+  retry() {},
+});
 export const useSession = () => useContext(AuthContext);
 
 export function SessionProvider({ children }: PropsWithChildren) {
@@ -24,16 +34,37 @@ export function SessionProvider({ children }: PropsWithChildren) {
       setLoading(false);
       setError(null);
     });
-    supabase.auth.getSession().then(({ data, error }) => {
-      if (!alive || authChanged) return;
-      setSession(data.session);
-      setError(error ? 'Unable to restore your session. Please retry.' : null);
-    }).catch(() => {
-      if (alive && !authChanged) setError('Unable to restore your session. Please retry.');
-    }).finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; data.subscription.unsubscribe(); };
+    supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (!alive || authChanged) return;
+        setSession(data.session);
+        setError(
+          error ? "Unable to restore your session. Please retry." : null,
+        );
+      })
+      .catch(() => {
+        if (alive && !authChanged)
+          setError("Unable to restore your session. Please retry.");
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+      data.subscription.unsubscribe();
+    };
   }, [revision]);
-  return <AuthContext.Provider value={{ session, loading, error, retry: () => setRevision(v => v + 1) }}>
-    {children}
-  </AuthContext.Provider>;
+  return (
+    <AuthContext.Provider
+      value={{
+        session,
+        loading,
+        error,
+        retry: () => setRevision((v) => v + 1),
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 }
