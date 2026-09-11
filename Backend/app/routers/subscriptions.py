@@ -1,11 +1,11 @@
 """Subscription endpoints — the backend equivalent of src/lib/subscriptions.ts.
 
 Every handler depends on `get_current_user_id`, so it only runs for a request
-carrying a valid token. Because the service_role client bypasses RLS, each
+carrying a valid token. Because the server database role can bypass RLS, each
 query is explicitly scoped to that user_id — that's what keeps one user from
 ever seeing or touching another's rows.
 
-The handlers are plain `def` (not `async def`): supabase-py is synchronous, so
+The handlers are plain `def` (not `async def`): psycopg is synchronous, so
 FastAPI runs these in a threadpool and the event loop is never blocked.
 """
 

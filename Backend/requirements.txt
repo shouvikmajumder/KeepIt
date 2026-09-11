@@ -2,7 +2,7 @@
 # Install into a virtualenv:  pip install -r requirements.txt
 fastapi==0.118.0
 uvicorn[standard]==0.37.0
-supabase==2.31.0          # service-role access to Postgres via PostgREST
+supabase==2.31.0          # server-side Supabase Auth administration
 pyjwt[crypto]==2.13.0     # verify the Supabase access-token (JWT)
 pydantic-settings==2.11.0 # load config from backend/.env
 psycopg[binary]==3.3.3   # transactions, row locks, and durable worker jobs

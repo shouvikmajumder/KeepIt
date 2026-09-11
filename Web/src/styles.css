@@ -719,7 +719,8 @@ input[type="checkbox"] {
   padding: 3rem clamp(1.5rem, 3.5vw, 4rem);
   max-width: 1680px;
   width: 100%;
-  margin: auto;
+  margin: 0 auto;
+  align-self: start;
 }
 .page-heading {
   display: flex;

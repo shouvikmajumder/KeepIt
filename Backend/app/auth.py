@@ -1,6 +1,6 @@
 """Turning the app's access-token into a trusted user_id.
 
-The Expo app keeps its Supabase auth session on-device and sends the session's
+The web app keeps its Supabase auth session in the browser and sends the session's
 access-token (a JWT) as `Authorization: Bearer <token>` on every request. We
 verify that token's signature here so we can trust the `sub` claim (the Supabase
 user id). Any endpoint that depends on `get_current_user_id` is therefore

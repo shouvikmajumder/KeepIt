@@ -1,9 +1,7 @@
-"""The one Supabase client the backend uses to reach Postgres.
+"""Server-only Supabase admin client for account lifecycle operations.
 
-It authenticates with the service_role key, which bypasses Row Level Security.
-That's a deliberate trade: the backend gets full table access, but in exchange
-every query MUST filter by the authenticated user_id itself (see the routers).
-The RLS policies in supabase/schema.sql remain as defense-in-depth.
+Tracking queries use psycopg through postgres.py and explicitly scope by user.
+The service-role credential is never exposed to the web frontend.
 """
 
 from functools import lru_cache
