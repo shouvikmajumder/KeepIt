@@ -59,7 +59,9 @@ function SubscriptionTable({ rows }: { rows: Subscription[] }) {
                   {row.name}
                 </Link>
                 {row.source === "plaid" && (
-                  <span className="source-label">Connected</span>
+                  <span className="source-label">
+                    {row.status === "pending_review" ? "Needs review" : "Connected"}
+                  </span>
                 )}
               </td>
               <td className="tabular">{money(row.cost)}</td>
@@ -105,6 +107,15 @@ export function Overview() {
                 <p>Active subscriptions</p>
                 <strong>{data.active_count.toString().padStart(2, "0")}</strong>
                 <p className="metric-note">Currently in your rotation</p>
+              </section>
+              <section className="metric">
+                <p>Needs review</p>
+                <strong>{data.pending_review_count.toString().padStart(2, "0")}</strong>
+                <p className="metric-note">
+                  {data.pending_review_count ? (
+                    <Link to="/discoveries">Review Plaid discoveries</Link>
+                  ) : "No new discoveries"}
+                </p>
               </section>
               <section className="metric">
                 <p>Next estimated renewal</p>
@@ -326,7 +337,7 @@ function SubscriptionForm({ item }: { item?: Subscription }) {
                 onChange={(e) => change({ next_renewal_date: e.target.value })}
               />
             </label>
-            {item && (
+            {item && item.status !== "pending_review" && (
               <label className="checkbox-label">
                 <input
                   type="checkbox"
@@ -337,6 +348,11 @@ function SubscriptionForm({ item }: { item?: Subscription }) {
                 />
                 Actively tracking
               </label>
+            )}
+            {item?.status === "pending_review" && (
+              <p className="muted form-note">
+                This Plaid discovery will not affect your spending total until you review it.
+              </p>
             )}
             <p className="muted form-note">
               Tracking changes do not cancel or modify your service.

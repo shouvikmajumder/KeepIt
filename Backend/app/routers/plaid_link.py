@@ -21,7 +21,11 @@ class ExchangeRequest(BaseModel):
 @router.post("/link-token")
 def link_token(body: LinkRequest, user_id: str = Depends(get_current_user_id)):
     payload = dict(user={"client_user_id": user_id}, client_name="KeepIt",
-                   country_codes=["US"], language="en", webhook=settings.plaid_webhook_url)
+                   country_codes=["US"], language="en")
+    # A public webhook is not available during local Sandbox development. The
+    # durable worker still performs the initial and manually queued syncs.
+    if settings.plaid_webhook_url:
+        payload["webhook"] = settings.plaid_webhook_url
     if settings.plaid_redirect_uri:
         payload["redirect_uri"] = settings.plaid_redirect_uri
     if body.connection_id:
@@ -29,8 +33,7 @@ def link_token(body: LinkRequest, user_id: str = Depends(get_current_user_id)):
             connection = owned_connection(db, body.connection_id, user_id)
             payload["access_token"] = decrypt(connection["token_ciphertext"])
     else:
-        payload.update(products=["transactions"], transactions={"days_requested": 730},
-                       additional_consented_products=["recurring_transactions"])
+        payload.update(products=["transactions"], transactions={"days_requested": 730})
     return {"link_token": plaid("/link/token/create", **payload)["link_token"]}
 
 

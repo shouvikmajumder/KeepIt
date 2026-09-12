@@ -32,7 +32,8 @@ def list_subscriptions(user_id: str = Depends(get_current_user_id), today: date 
     with transaction() as db:
         records = db.execute(f"select {_COLUMNS} from public.subscriptions where user_id=%s", (user_id,)).fetchall()
     rows = [project(row, today or date.today()) for row in records]
-    return sorted(rows, key=lambda row: (row["status"] != "active", row["next_renewal_date"]))
+    status_order = {"active": 0, "pending_review": 1, "inactive": 2}
+    return sorted(rows, key=lambda row: (status_order.get(row["status"], 3), row["next_renewal_date"]))
 
 
 @router.post("", response_model=SubscriptionOut, status_code=status.HTTP_201_CREATED)
@@ -55,10 +56,16 @@ def delete_subscription(sub_id: UUID, user_id: str = Depends(get_current_user_id
     """Delete one of this user's subscriptions. The user_id filter means a
     caller can't delete a row that isn't theirs (it simply matches nothing)."""
     with transaction() as db:
-        connection = db.execute("select connection_id from public.subscriptions where id=%s and user_id=%s", (sub_id, user_id)).fetchone()
+        connection = db.execute("""select connection_id,candidate_id,status from public.subscriptions
+            where id=%s and user_id=%s""", (sub_id, user_id)).fetchone()
         if connection and connection["connection_id"]:
             # Match the worker's lock order before deleting its linked candidate reference.
             db.execute("select id from keepit_private.connections where id=%s for update", (connection["connection_id"],))
+        if connection and connection["status"] == "pending_review" and connection["candidate_id"]:
+            # Removing a provisional discovery is an explicit ignore. Without
+            # this marker, the next provider refresh would create it again.
+            db.execute("update keepit_private.candidates set decision='ignored' where id=%s",
+                       (connection["candidate_id"],))
         db.execute("delete from public.subscriptions where id=%s and user_id=%s", (sub_id, user_id))
     return None
 

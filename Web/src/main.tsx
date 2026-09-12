@@ -21,6 +21,8 @@ import {
   Subscriptions,
 } from "./pages/tracking";
 import { Settings } from "./pages/settings";
+import { Connections } from "./pages/connections";
+import { Discoveries } from "./pages/discoveries";
 import "./styles.css";
 
 function Protected() {
@@ -56,6 +58,12 @@ function Shell() {
           </NavLink>
           <NavLink to="/subscriptions">
             <span aria-hidden="true">≡</span>Subscriptions
+          </NavLink>
+          <NavLink to="/connections">
+            <span aria-hidden="true">▣</span>Connections
+          </NavLink>
+          <NavLink to="/discoveries">
+            <span aria-hidden="true">✦</span>Review
           </NavLink>
           <NavLink to="/settings">
             <span aria-hidden="true">⚙</span>Settings
@@ -111,6 +119,8 @@ function App() {
             <Route path="/overview" element={<Overview />} />
             <Route path="/subscriptions" element={<Subscriptions />} />
             <Route path="/subscriptions/new" element={<NewSubscription />} />
+            <Route path="/connections" element={<Connections />} />
+            <Route path="/discoveries" element={<Discoveries />} />
             <Route
               path="/subscriptions/:id"
               element={<SubscriptionDetails />}

@@ -1,6 +1,8 @@
 """Reduce provider data to the fields needed for subscription review."""
 from decimal import Decimal, InvalidOperation
 from psycopg.types.json import Jsonb
+from pydantic import ValidationError
+from .schemas import SubscriptionCreate
 
 
 def observation(stream: dict, accounts: list[dict]) -> dict:
@@ -38,6 +40,23 @@ def store_stream(db, connection: dict, stream: dict):
         set observation=excluded.observation returning id,decision,subscription_id""",
         (connection["id"], stream["stream_id"], Jsonb(data))).fetchone()
     if not candidate["subscription_id"]:
+        # A stream is provisional until the user confirms it. Ignored streams
+        # intentionally remain candidate-only so later syncs never recreate
+        # them without the user's involvement.
+        if candidate["decision"] != "pending" or not data["eligible"]:
+            return
+        try:
+            form = SubscriptionCreate(name=data["name"], cost=data["cost"], currency=data["currency"],
+                billing_interval=data["billing_interval"], next_renewal_date=data["next_renewal_date"])
+        except ValidationError:
+            return
+        sub_id = db.execute("""insert into public.subscriptions
+            (user_id,name,cost,next_renewal_date,recurrence_anchor,billing_interval,status,source,
+             connection_id,candidate_id,provider_observation)
+            values (%s,%s,%s,%s,%s,%s,'pending_review','plaid',%s,%s,%s) returning id""",
+            (connection["user_id"], form.name, form.cost, form.next_renewal_date,
+             form.next_renewal_date, form.billing_interval, connection["id"], candidate["id"], Jsonb(data))).fetchone()["id"]
+        db.execute("update keepit_private.candidates set subscription_id=%s where id=%s", (sub_id, candidate["id"]))
         return
     # Observation updates are separate from overrides, so refreshes respect edits.
     db.execute("update public.subscriptions set provider_observation=%s where id=%s and user_id=%s",

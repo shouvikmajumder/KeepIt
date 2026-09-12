@@ -8,12 +8,20 @@ Supabase handles email/password authentication. Tracking data is accessible thro
 
 Requirements: Node 20.20.1 or a compatible newer LTS release, Python 3.13, and the existing Supabase project.
 
-1. In `Web`, run `npm ci` and copy `.env.example` to `.env` if it does not already exist.
+1. In `Web`, run `npm ci` and configure `Web/.env` with `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_API_URL`.
 2. In `Backend`, create `.venv` with `python3 -m venv .venv`, then run `.venv/bin/pip install -r requirements.txt`.
 3. Configure `Backend/.env` with `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `DATABASE_URL`.
 4. Configure `Web/.env` with the same project's public URL/key and `VITE_API_URL=http://localhost:8000`.
 5. Inspect the tracking schema using `.venv/bin/python scripts/configure_tracking.py` from `Backend`.
-6. Run `./start-dev.sh` from the repository root, then open **http://localhost:5173**. Ctrl-C stops both processes.
+6. Run `./start-dev.sh` from the repository root for manual tracking, then open **http://localhost:5173**. Ctrl-C stops both processes.
+
+### Local Plaid Sandbox
+
+The browser flow is ready for local Sandbox development. Apply the pending tracking migration, add
+`PLAID_CLIENT_ID`, `PLAID_SECRET`, and `TOKEN_ENCRYPTION_KEY` to `Backend/.env`, and ensure the Plaid project has
+Transactions plus Recurring Transactions access. Leave `PLAID_WEBHOOK_URL` blank locally; the worker performs the
+initial and manually requested syncs. Run `./start-plaid-dev.sh` instead of `./start-dev.sh` to start the web app,
+API, and worker together.
 
 To run each process separately:
 
@@ -33,7 +41,7 @@ Redirect configuration is a Supabase dashboard setting; a service-role key canno
 
 ## Database
 
-SQL lives in `Backend/supabase/`. On a **new** database, run `schema.sql` before migrations 001–003.
+SQL lives in `Backend/supabase/`. On a **new** database, run `schema.sql` before migrations 001–004.
 On the existing database, do not rerun the baseline or previously applied migrations.
 
 The inspection helper recognizes the existing baseline and complete migration states. Run it with `--apply`
@@ -51,12 +59,14 @@ The database password is different from the public key and service-role key.
 - Signup, login, email confirmation, password recovery, persistent browser sessions, and sign-out.
 - Add, edit, deactivate, and remove monthly/annual USD subscriptions.
 - Monthly-equivalent spending and upcoming renewal estimates.
+- Browser Plaid Link for US credit and depository accounts in local Sandbox development.
+- Automatic provisional Plaid discoveries; users confirm, ignore, or match them before they affect spending totals.
 - Account deletion, including revocation of any previously connected bank access.
 - Dark desktop UI with keyboard-accessible forms and confirmation dialogs.
 
-Bank linking and discovery are not exposed in this MVP. Their backend endpoints, encrypted-token storage,
-and worker remain available for a later browser integration. Manual tracking does not require Plaid keys,
-a webhook, or the worker. Tracking does not charge or cancel subscriptions with providers.
+Manual tracking does not require Plaid keys, a webhook, or the worker. Local discovery does not receive remote
+webhooks; that is enabled later with the public API deployment. Tracking does not charge or cancel subscriptions
+with providers.
 
 ## Validation
 

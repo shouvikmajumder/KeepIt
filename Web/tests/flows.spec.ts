@@ -30,6 +30,8 @@ async function setup(page: Page, signedIn = true) {
     accountDeletes: 0,
     callbacks: 0,
     failCallback: false,
+    connections: [] as Array<{ id: string; institution_name: string; accounts: { id: string; label: string }[]; sync_status: string; last_synced_at: string | null }>,
+    candidates: [] as Array<{ id: string; connection_id: string; decision: string; subscription_id: string | null; observation: Record<string, unknown> }>,
   };
   if (signedIn)
     await page.addInitScript(
@@ -76,10 +78,20 @@ async function setup(page: Page, signedIn = true) {
         json: {
           monthly_equivalent: total.toFixed(2),
           active_count: active.length,
+          pending_review_count: state.rows.filter((row) => row.status === "pending_review").length,
           currency: "USD",
           upcoming: active.slice(0, 5),
         },
       });
+    }
+    if (url.pathname === "/connections")
+      return route.fulfill({ json: state.connections });
+    if (url.pathname === "/subscription-candidates")
+      return route.fulfill({ json: state.candidates });
+    if (url.pathname.startsWith("/subscription-candidates/") && request.method() === "POST") {
+      const candidate = state.candidates.find((item) => item.id === url.pathname.split("/")[2])!;
+      candidate.decision = request.postDataJSON().action === "ignore" ? "ignored" : "confirmed";
+      return route.fulfill({ json: { decision: candidate.decision, subscription_id: candidate.subscription_id } });
     }
     if (request.method() === "GET") {
       if (state.failList)
@@ -250,6 +262,25 @@ test("invalid costs do not create records; account deletion can be cancelled", a
   await expect(
     page.getByText("test@example.invalid", { exact: true }),
   ).toHaveCount(0);
+});
+
+test("connections and Plaid discoveries are available in the desktop workspace", async ({ page }) => {
+  const state = await setup(page);
+  state.connections.push({
+    id: "connection-1", institution_name: "Sandbox Bank", accounts: [{ id: "card", label: "Card ••1234" }],
+    sync_status: "ready", last_synced_at: "2026-01-01T00:00:00Z",
+  });
+  state.candidates.push({
+    id: "candidate-1", connection_id: "connection-1", decision: "pending", subscription_id: "provisional-1",
+    observation: { name: "Netflix", cost: "15.00", currency: "USD", billing_interval: "monthly", next_renewal_date: "2027-01-31", account_label: "Card ••1234", eligible: true, reason: null },
+  });
+  await page.goto("/connections");
+  await expect(page.getByRole("heading", { name: "Connected accounts" })).toBeVisible();
+  await expect(page.getByText("Sandbox Bank")).toBeVisible();
+  await page.getByRole("link", { name: "Review discoveries" }).click();
+  await expect(page.getByRole("heading", { name: "Review subscriptions" })).toBeVisible();
+  await page.getByRole("button", { name: "Track subscription" }).click();
+  await expect(page.getByText("Nothing to review right now")).toBeVisible();
 });
 
 test("recovery callback exchanges once and saves the password", async ({

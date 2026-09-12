@@ -13,7 +13,7 @@ class PlaidError(Exception):
 
 def require_plaid():
     if not all((settings.plaid_client_id, settings.plaid_secret, settings.token_encryption_key,
-                settings.database_url, settings.plaid_webhook_url)):
+                settings.database_url)):
         raise HTTPException(503, "Bank connections are not configured yet. You can add manually.")
     if settings.plaid_environment not in ("sandbox", "production"):
         raise HTTPException(503, "Unsupported Plaid environment")

@@ -20,6 +20,13 @@ TRACKING_COLUMNS = {"billing_interval", "currency", "status", "source", "recurre
 LINK_COLUMNS = {"connection_id", "candidate_id"}
 
 
+def supports_pending_review(db):
+    row = db.execute("""select pg_get_constraintdef(oid) as definition
+        from pg_constraint where conrelid='public.subscriptions'::regclass
+        and contype='c' and conname='subscriptions_status_check'""").fetchone()
+    return bool(row and "pending_review" in row["definition"])
+
+
 def inspect(db):
     columns = db.execute("""select column_name, data_type, is_nullable, column_default
         from information_schema.columns where table_schema='public' and table_name='subscriptions'
@@ -42,6 +49,8 @@ def inspect(db):
         pending.append("002_connections.sql")
     if any(row["grantee"] in ("anon", "authenticated") for row in privileges):
         pending.append("003_api_access.sql")
+    if TRACKING_COLUMNS <= names and not supports_pending_review(db):
+        pending.append("004_pending_review.sql")
     return columns, privileges, pending
 
 

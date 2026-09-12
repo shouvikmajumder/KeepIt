@@ -41,11 +41,11 @@ class SubscriptionOut(BaseModel):
     created_at: datetime
     billing_interval: Literal["monthly", "annual"]
     currency: Literal["USD"]
-    status: Literal["active", "inactive"]
+    status: Literal["active", "inactive", "pending_review"]
     source: Literal["manual", "plaid"]
     recurrence_anchor: date
 
 
 class SubscriptionUpdate(SubscriptionCreate):
     # Send a complete editable form; ownership and provider fields stay server-side.
-    status: Literal["active", "inactive"] = "active"
+    status: Literal["active", "inactive", "pending_review"] = "active"
