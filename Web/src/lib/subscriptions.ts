@@ -7,7 +7,7 @@ export type Subscription = {
   cost: string;
   billing_interval: "monthly" | "annual";
   currency: "USD";
-  status: "active" | "inactive";
+  status: "active" | "inactive" | "pending_review";
   source: "manual" | "plaid";
   recurrence_anchor: string;
   next_renewal_date: string;
@@ -22,6 +22,7 @@ export type SubscriptionUpdate = SubscriptionInput &
 export type Dashboard = {
   monthly_equivalent: string;
   active_count: number;
+  pending_review_count: number;
   currency: "USD";
   upcoming: Subscription[];
 };

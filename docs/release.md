@@ -22,12 +22,11 @@ The current milestone is a local desktop MVP. Deployment and browser bank linkin
 - Monitor API failures, readiness, and database connectivity.
 - Test keyboard navigation, dialog focus, and desktop layouts at 1024px and 1440px.
 
-## Later browser Plaid integration
+## Future hosted Plaid deployment
 
-- Integrate Plaid Link for web and configure its HTTPS OAuth return URL.
+- Configure the existing browser Plaid Link flow with its HTTPS OAuth return URL.
 - Confirm Transactions and Recurring Transactions product access, first with Sandbox.
 - Configure PLAID_WEBHOOK_URL as the API's public /webhooks/plaid endpoint.
 - Store Plaid secrets and the stable encryption key only on the backend.
-- Run the API and worker as separate processes; monitor overdue jobs and failed syncs.
-- Restore connection management and discovery review in the web UI; test retries, reconnects,
-  duplicate submissions, preservation of user edits, and disconnect retaining manual records.
+- On Render, run the static web app, API, and worker as separate services; monitor overdue jobs and failed syncs.
+- Test webhook retries, reconnects, duplicate submissions, preservation of user edits, and disconnect retaining manual records.

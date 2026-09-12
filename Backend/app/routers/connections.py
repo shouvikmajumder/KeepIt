@@ -21,7 +21,10 @@ def disconnect(db, connection_id, user_id):
     except PlaidError as exc:
         if exc.code not in ("ITEM_NOT_FOUND", "INVALID_ACCESS_TOKEN"):
             raise
-    # Keep the user's confirmed tracking records after bank access is revoked.
+    # Provisional discoveries disappear with the connection. Confirmed tracking
+    # records remain, but no longer receive provider updates.
+    db.execute("""delete from public.subscriptions where connection_id=%s and user_id=%s
+        and status='pending_review'""", (connection_id, user_id))
     db.execute("""update public.subscriptions set source='manual',connection_id=null,
         candidate_id=null,provider_observation='{}',user_overrides='{}'
         where connection_id=%s and user_id=%s""", (connection_id, user_id))

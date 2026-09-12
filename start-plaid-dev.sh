@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the local KeepIt web app and API. Ctrl-C stops both processes.
+# Run local web, API, and the durable Plaid discovery worker together.
 set -euo pipefail
 KEEPIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ ! -x "$KEEPIT_ROOT/Backend/.venv/bin/uvicorn" ]]; then
@@ -12,10 +12,12 @@ if [[ ! -f "$KEEPIT_ROOT/Web/node_modules/vite/bin/vite.js" ]]; then
 fi
 api_pid=""
 web_pid=""
+worker_pid=""
 cleanup() {
   trap - EXIT INT TERM
   [[ -z "$api_pid" ]] || kill "$api_pid" 2>/dev/null || true
   [[ -z "$web_pid" ]] || kill "$web_pid" 2>/dev/null || true
+  [[ -z "$worker_pid" ]] || kill "$worker_pid" 2>/dev/null || true
   wait 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -25,9 +27,11 @@ trap 'exit 143' TERM
 api_pid=$!
 (cd "$KEEPIT_ROOT/Web" && exec node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5173 --strictPort) &
 web_pid=$!
-echo "KeepIt: http://localhost:5173 · API: http://localhost:8000"
-while kill -0 "$api_pid" 2>/dev/null && kill -0 "$web_pid" 2>/dev/null; do
+(cd "$KEEPIT_ROOT/Backend" && exec .venv/bin/python -m app.worker) &
+worker_pid=$!
+echo "KeepIt Plaid: http://localhost:5173 · API: http://localhost:8000 · worker running"
+while kill -0 "$api_pid" 2>/dev/null && kill -0 "$web_pid" 2>/dev/null && kill -0 "$worker_pid" 2>/dev/null; do
   sleep 1
 done
-echo "A development process stopped; shutting down the other process." >&2
+echo "A development process stopped; shutting down the others." >&2
 exit 1

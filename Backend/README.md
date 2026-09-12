@@ -18,7 +18,7 @@ Required settings: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and DATABASE_URL.
 Use the existing project's direct/session-pooler PostgreSQL URL; encode password characters and enable SSL.
 ALLOWED_ORIGINS defaults to the local web app's localhost and 127.0.0.1 origins on port 5173.
 
-supabase/schema.sql is for new databases only. Migrations 001–003 extend existing tracking tables.
+supabase/schema.sql is for new databases only. Migrations 001–004 extend existing tracking tables.
 scripts/configure_tracking.py --apply snapshots the subscriptions table and applies recognized missing
 migrations atomically. See the root README for its scope and preservation checks.
 
@@ -31,11 +31,15 @@ migrations atomically. See the root README for its scope and preservation checks
 | GET/POST /subscriptions | List/create subscriptions |
 | PATCH/DELETE /subscriptions/{id} | Update/remove a subscription |
 | GET /dashboard | Monthly equivalent and upcoming renewals |
+| POST /plaid/link-token, /plaid/exchange | Start and finish a browser Plaid Link connection |
+| GET/DELETE /connections | List or revoke connected accounts |
+| GET /subscription-candidates | List provisional recurring-payment discoveries |
+| POST /subscription-candidates/{id}/review | Confirm, ignore, or match a discovery |
 | DELETE /account | Revoke existing bank access and delete the account |
 
-Interactive API documentation is at http://localhost:8000/docs.
-The existing Plaid, connections, review, and webhook routes are retained for a later web release.
-Do not start python -m app.worker for manual-only development; it requires all Plaid settings.
+Interactive API documentation is at http://localhost:8000/docs. For local Plaid Sandbox development, start the
+worker with `python -m app.worker` (or use `../start-plaid-dev.sh` from the repository root). Do not start it for
+manual-only development; it requires Plaid settings.
 
 ## Tests
 
