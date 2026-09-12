@@ -19,6 +19,25 @@ class ReviewContractTests(unittest.TestCase):
 
 
 class ReviewTests(DatabaseCase):
+    def test_currency_fallback_reprocesses_candidate_without_duplicates(self):
+        connection = self.connection()
+        connection["accounts"] = [{"id": "card", "label": "Card"}]
+        stream = {"stream_id": "missing-currency", "account_id": "card", "is_active": True,
+                  "frequency": "MONTHLY", "last_amount": {"amount": 15}, "predicted_next_date": "2027-01-31"}
+        with transaction() as db:
+            store_stream(db, connection, stream)
+            before = db.execute("select * from keepit_private.candidates where connection_id=%s", (connection["id"],)).fetchone()
+            self.assertIsNone(before["subscription_id"])
+            connection["accounts"][0]["iso_currency_code"] = "USD"
+            store_stream(db, connection, stream)
+            store_stream(db, connection, stream)
+            after = db.execute("select * from keepit_private.candidates where connection_id=%s", (connection["id"],)).fetchall()
+            self.assertEqual(len(after), 1)
+            self.assertEqual(after[0]["id"], before["id"])
+            self.assertTrue(after[0]["observation"]["eligible"])
+            rows = db.execute("select status,currency from public.subscriptions where connection_id=%s", (connection["id"],)).fetchall()
+            self.assertEqual(rows, [{"status": "pending_review", "currency": "USD"}])
+
     def test_concurrent_confirmation_creates_one_subscription(self):
         connection = self.connection()
         candidate = self.candidate(connection)

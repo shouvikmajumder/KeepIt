@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { ConfirmDialog, Loading, Notice, PageHeading } from "../components/ui";
@@ -13,6 +13,7 @@ import {
 } from "../lib/subscriptions";
 import type { Subscription, SubscriptionUpdate } from "../lib/subscriptions";
 import { useResource } from "../lib/use-resource";
+import { listCandidates, reviewCandidate, type Candidate } from "../lib/banks";
 
 function EmptyState() {
   return (
@@ -109,11 +110,11 @@ export function Overview() {
                 <p className="metric-note">Currently in your rotation</p>
               </section>
               <section className="metric">
-                <p>Needs review</p>
+                <p>Discovered payments</p>
                 <strong>{data.pending_review_count.toString().padStart(2, "0")}</strong>
                 <p className="metric-note">
                   {data.pending_review_count ? (
-                    <Link to="/discoveries">Review Plaid discoveries</Link>
+                    <Link to="/subscriptions">View discovered subscriptions</Link>
                   ) : "No new discoveries"}
                 </p>
               </section>
@@ -158,8 +159,103 @@ export function Overview() {
   );
 }
 
+async function loadSubscriptions(signal: AbortSignal) {
+  const [subscriptions, candidates] = await Promise.all([
+    listSubscriptions(signal), listCandidates(signal),
+  ]);
+  return { subscriptions, candidates };
+}
+
+function DiscoveredSubscription({ item, candidate, onDecided }: {
+  item: Subscription;
+  candidate: Candidate;
+  onDecided: (itemId: string, candidateId: string,
+    result: Awaited<ReturnType<typeof reviewCandidate>>, focusedRow: HTMLTableRowElement | null) => void;
+}) {
+  const row = useRef<HTMLTableRowElement>(null);
+  const pending = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function decide(action: "confirm" | "ignore") {
+    if (pending.current) return;
+    const hadFocus = row.current?.contains(document.activeElement);
+    pending.current = true;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await reviewCandidate(candidate.id, action);
+      const restoreFocus = row.current?.contains(document.activeElement)
+        || (hadFocus && document.activeElement === document.body);
+      onDecided(item.id, candidate.id, result, restoreFocus ? row.current : null);
+    } catch (error) {
+      setError(errorMessage(error));
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
+  }
+  return (
+    <tr ref={row}>
+      <td>
+        <Link className="subscription-name" to={`/subscriptions/${item.id}`}>{item.name}</Link>
+        <span className="source-label">{candidate.observation.account_label}</span>
+      </td>
+      <td className="tabular">{money(item.cost)}</td>
+      <td className="capitalize">{item.billing_interval}</td>
+      <td>{dateLabel(item.next_renewal_date)}</td>
+      <td>
+        <div className="connection-actions">
+          <button className="button primary" disabled={busy} onClick={() => decide("confirm")}>Keep</button>
+          <button className="button secondary" disabled={busy} onClick={() => decide("ignore")}>Dismiss</button>
+        </div>
+        <Notice error={error} />
+      </td>
+    </tr>
+  );
+}
+
 export function Subscriptions() {
-  const { data, error, loading, reload } = useResource(listSubscriptions);
+  const { data, error, loading, reload, updateData } = useResource(loadSubscriptions);
+  const trackedHeading = useRef<HTMLHeadingElement>(null);
+  const focusAfterDecision = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    const target = focusAfterDecision.current;
+    if (target) {
+      (target.isConnected ? target : trackedHeading.current)?.focus({ preventScroll: true });
+      focusAfterDecision.current = null;
+    }
+  }, [data]);
+  function onDecided(itemId: string, candidateId: string,
+    result: Awaited<ReturnType<typeof reviewCandidate>>, focusedRow: HTMLTableRowElement | null) {
+    if (focusedRow) {
+      const rows = Array.from(focusedRow.parentElement?.children || []);
+      const index = rows.indexOf(focusedRow);
+      const neighbors = [...rows.slice(index + 1), ...rows.slice(0, index).reverse()];
+      focusAfterDecision.current = neighbors
+        .map((row) => row.querySelector<HTMLButtonElement>("button:not(:disabled)"))
+        .find((button) => button !== null) || trackedHeading.current;
+    }
+    updateData((current) => ({
+      candidates: current.candidates.map((candidate) => candidate.id === candidateId
+        ? { ...candidate, ...result } : candidate),
+      subscriptions: result.decision === "confirmed"
+        ? current.subscriptions.map((subscription) => subscription.id === itemId
+          ? { ...subscription, status: "active" } : subscription)
+        : current.subscriptions.filter((subscription) => subscription.id !== itemId),
+    }));
+  }
+  const tracked = data?.subscriptions.filter((item) => item.status !== "pending_review") || [];
+  const pendingBySubscription = new Map(
+    data?.candidates.filter((candidate) => candidate.decision === "pending" && candidate.observation.eligible)
+      .map((candidate) => [candidate.subscription_id, candidate]),
+  );
+  const discovered = data?.subscriptions.filter((item) =>
+    item.status === "pending_review" && pendingBySubscription.has(item.id)) || [];
+  const displayedIds = new Set(discovered.map((item) => pendingBySubscription.get(item.id)!.id));
+  const unavailable = data?.candidates.filter((candidate) =>
+    candidate.decision === "pending" && !displayedIds.has(candidate.id)) || [];
+  const unavailableReasons = [...new Set(unavailable.map((candidate) =>
+    candidate.observation.reason || "Payment details or the next renewal date are incomplete."))];
   return (
     <>
       <PageHeading eyebrow="Your recurring essentials" title="Subscriptions">
@@ -172,15 +268,55 @@ export function Subscriptions() {
         <Loading />
       ) : (
         data && (
+          <>
+          {unavailable.length > 0 && (
+            <section className="panel discovered-subscriptions" aria-labelledby="unavailable-heading">
+              <header className="panel-heading">
+                <div>
+                  <h2 id="unavailable-heading">{unavailable.length} discovered {unavailable.length === 1 ? "payment is" : "payments are"} not ready to track</h2>
+                  <p className="muted">{unavailableReasons.join(" ")}</p>
+                  <p className="muted">These payments are excluded from spending totals. You can check for updates in Connections.</p>
+                </div>
+                <Link to="/connections">Manage connections</Link>
+              </header>
+            </section>
+          )}
+          {discovered.length > 0 && (
+            <section className="panel discovered-subscriptions" aria-labelledby="discovered-heading">
+              <header className="panel-heading">
+                <div>
+                  <h2 id="discovered-heading">Discovered payments <span className="count">{discovered.length}</span></h2>
+                  <p className="muted">Keep the payments you want to track. They count toward spending only after you keep them.</p>
+                </div>
+              </header>
+              <div className="table-scroll">
+                <table>
+                  <caption className="sr-only">Discovered recurring payments</caption>
+                  <thead><tr>
+                    <th scope="col">Subscription</th><th scope="col">Cost</th>
+                    <th scope="col">Billing</th><th scope="col">Next renewal · est.</th>
+                    <th scope="col">Actions</th>
+                  </tr></thead>
+                  <tbody>{discovered.map((item) => (
+                    <DiscoveredSubscription key={item.id} item={item} candidate={pendingBySubscription.get(item.id)!} onDecided={onDecided} />
+                  ))}</tbody>
+                </table>
+              </div>
+              <p className="discovery-footnote">Dismissing a payment hides it from KeepIt; it does not cancel the service.</p>
+            </section>
+          )}
           <section className="panel">
             <header className="panel-heading">
-              <h2>
-                All subscriptions <span className="count">{data.length}</span>
+              <h2 ref={trackedHeading} tabIndex={-1}>
+                Tracked subscriptions <span className="count">{tracked.length}</span>
               </h2>
               <span className="muted">All amounts in USD</span>
             </header>
-            {data.length ? <SubscriptionTable rows={data} /> : <EmptyState />}
+            {tracked.length ? <SubscriptionTable rows={tracked} /> : discovered.length ? (
+              <p className="empty-inline">Keep a discovered payment above or add a subscription manually to start tracking.</p>
+            ) : <EmptyState />}
           </section>
+          </>
         )
       )}
     </>
@@ -351,7 +487,7 @@ function SubscriptionForm({ item }: { item?: Subscription }) {
             )}
             {item?.status === "pending_review" && (
               <p className="muted form-note">
-                This Plaid discovery will not affect your spending total until you review it.
+                Keep this payment on the Subscriptions page to include it in your spending total.
               </p>
             )}
             <p className="muted form-note">

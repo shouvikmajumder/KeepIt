@@ -9,6 +9,13 @@ def observation(stream: dict, accounts: list[dict]) -> dict:
     amount = stream.get("last_amount") or {}
     interval = {"MONTHLY": "monthly", "ANNUALLY": "annual"}.get(stream.get("frequency"))
     account = next((a for a in accounts if a["id"] == stream.get("account_id")), {})
+    currency = amount.get("iso_currency_code")
+    unofficial_currency = amount.get("unofficial_currency_code")
+    # Use only the matching account's currency when the payment supplies neither.
+    # Explicit foreign or unofficial currencies must never become USD by fallback.
+    if currency is None and unofficial_currency is None:
+        currency = account.get("iso_currency_code")
+        unofficial_currency = account.get("unofficial_currency_code")
     try:
         cost = Decimal(str(amount.get("amount", "0")))
         valid_cost = cost.is_finite() and 0 < cost < Decimal("100000000")
@@ -19,7 +26,9 @@ def observation(stream: dict, accounts: list[dict]) -> dict:
         reason = "This account is not selected."
     elif not stream.get("is_active"):
         reason = "This recurring payment is no longer active."
-    elif amount.get("iso_currency_code") != "USD":
+    elif currency is None and unofficial_currency is None:
+        reason = "Payment currency is unavailable."
+    elif currency != "USD" or unofficial_currency is not None:
         reason = "Only USD subscriptions are supported."
     elif not interval:
         reason = "Only monthly and annual billing are supported."
@@ -27,7 +36,7 @@ def observation(stream: dict, accounts: list[dict]) -> dict:
         reason = "A positive subscription amount is required."
     return {"name": (stream.get("merchant_name") or stream.get("description") or "Recurring payment")[:120],
             "cost": str(cost.quantize(Decimal("0.01"))) if valid_cost else "0.00",
-            "billing_interval": interval, "currency": amount.get("iso_currency_code"),
+            "billing_interval": interval, "currency": currency,
             "next_renewal_date": stream.get("predicted_next_date"),
             "last_payment_date": stream.get("last_date"), "account_label": account.get("label", "Account"),
             "eligible": reason is None, "reason": reason}

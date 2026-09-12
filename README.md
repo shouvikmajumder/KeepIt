@@ -60,7 +60,7 @@ The database password is different from the public key and service-role key.
 - Add, edit, deactivate, and remove monthly/annual USD subscriptions.
 - Monthly-equivalent spending and upcoming renewal estimates.
 - Browser Plaid Link for US credit and depository accounts in local Sandbox development.
-- Automatic provisional Plaid discoveries; users confirm, ignore, or match them before they affect spending totals.
+- Automatic provisional Plaid discoveries appear in Subscriptions; users keep or dismiss them before they affect spending totals.
 - Account deletion, including revocation of any previously connected bank access.
 - Dark desktop UI with keyboard-accessible forms and confirmation dialogs.
 

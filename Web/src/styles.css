@@ -170,8 +170,7 @@ tbody tr:hover {
 .connections-panel {
   max-width: 900px;
 }
-.connection-card,
-.discovery-card {
+.connection-card {
   padding: 1.5rem;
   border-top: 1px solid var(--line);
 }
@@ -181,8 +180,7 @@ tbody tr:hover {
   justify-content: space-between;
   gap: 1.5rem;
 }
-.connection-card h2,
-.discovery-card h2 {
+.connection-card h2 {
   font-size: 1rem;
 }
 .connection-state {
@@ -190,8 +188,7 @@ tbody tr:hover {
   color: #c9d7e7;
   font-size: 0.875rem;
 }
-.connection-actions,
-.discovery-actions {
+.connection-actions {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -220,37 +217,13 @@ tbody tr:hover {
   padding: 2rem 1.5rem;
   color: var(--muted);
 }
-.discovery-list {
-  display: grid;
-  gap: 1rem;
-  max-width: 900px;
+.discovered-subscriptions {
+  margin-bottom: 1.5rem;
 }
-.discovery-card {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--panel);
-}
-.discovery-card .source-label {
-  padding: 0;
-  margin-bottom: 0.5rem;
-  color: #ffe0a3;
-}
-.discovery-summary > p {
-  margin-top: 0.3rem;
-}
-.discovery-actions {
-  margin-top: 1.25rem;
-}
-.match-row {
-  display: flex;
-  align-items: end;
-  gap: 1rem;
-  margin-top: 1.5rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--line);
-}
-.match-row label {
-  flex: 1;
+.discovery-footnote {
+  padding: 1rem 1.5rem;
+  color: var(--muted);
+  font-size: 0.8rem;
 }
 .page-footnote {
   font-size: 0.8rem;
@@ -416,8 +389,7 @@ tbody tr:hover {
   .app-shell {
     grid-template-columns: 170px minmax(0, 1fr);
   }
-  .connection-card,
-  .match-row {
+  .connection-card {
     align-items: stretch;
     flex-direction: column;
   }

@@ -26,7 +26,8 @@ export type Candidate = {
 };
 
 export const listConnections = () => apiFetch<Connection[]>("/connections");
-export const listCandidates = () => apiFetch<Candidate[]>("/subscription-candidates");
+export const listCandidates = (signal?: AbortSignal) =>
+  apiFetch<Candidate[]>("/subscription-candidates", { signal });
 export const disconnect = (id: string) =>
   apiFetch<void>(`/connections/${encodeURIComponent(id)}`, { method: "DELETE" });
 export const refreshConnection = (id: string) =>

@@ -10,14 +10,17 @@ from .postgres import transaction
 def sync(db, connection):
     token = decrypt(connection["token_ciphertext"])
     response = plaid("/accounts/get", access_token=token)
-    accounts = [{"id": a["account_id"], "label": a["name"] + (f" ••{a['mask']}" if a.get("mask") else "")}
+    accounts = [{"id": a["account_id"], "label": a["name"] + (f" ••{a['mask']}" if a.get("mask") else ""),
+                 "iso_currency_code": (a.get("balances") or {}).get("iso_currency_code"),
+                 "unofficial_currency_code": (a.get("balances") or {}).get("unofficial_currency_code")}
                 for a in response["accounts"] if a["type"] in ("credit", "depository")]
     name = connection["institution_name"]
     institution_id = response["item"].get("institution_id")
     if institution_id and not connection["institution_id"]:
         name = plaid("/institutions/get_by_id", institution_id=institution_id, country_codes=["US"])["institution"]["name"]
     db.execute("""update keepit_private.connections set accounts=%s,institution_id=%s,
-        institution_name=%s where id=%s""", (Jsonb(accounts), institution_id, name, connection["id"]))
+        institution_name=%s where id=%s""",
+        (Jsonb([{"id": a["id"], "label": a["label"]} for a in accounts]), institution_id, name, connection["id"]))
     connection["accounts"] = accounts
     result = plaid("/transactions/recurring/get", access_token=token)
     for stream in result["outflow_streams"]:

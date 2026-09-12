@@ -154,7 +154,7 @@ export function Connections() {
           {busy ? "Opening Plaid…" : "Connect bank or card"}
         </button>
       </PageHeading>
-      <p className="page-intro">Connect through Plaid to find recurring charges. You review each discovery before it affects your spending total.</p>
+      <p className="page-intro">Connect through Plaid to find recurring charges. Keep or dismiss discovered payments on your Subscriptions page.</p>
       <Notice error={error || loadError} retry={error || loadError ? reload : undefined} />
       {linkToken && (
         <PlaidLauncher
@@ -176,7 +176,7 @@ export function Connections() {
               <h2>Connected accounts</h2>
               <p className="muted">Plaid access can be removed at any time.</p>
             </div>
-            <Link to="/discoveries">Review discoveries</Link>
+            <Link to="/subscriptions">View subscriptions</Link>
           </header>
           {data?.length ? data.map((row) => (
             <ConnectionCard key={row.id} row={row} busy={busy} onReconnect={startLink} onRefresh={refresh} onDisconnect={remove} />
