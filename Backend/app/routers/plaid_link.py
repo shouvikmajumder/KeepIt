@@ -33,8 +33,7 @@ def link_token(body: LinkRequest, user_id: str = Depends(get_current_user_id)):
             connection = owned_connection(db, body.connection_id, user_id)
             payload["access_token"] = decrypt(connection["token_ciphertext"])
     else:
-        payload.update(products=["transactions"], transactions={"days_requested": 730},
-                       additional_consented_products=["recurring_transactions"])
+        payload.update(products=["transactions"], transactions={"days_requested": 730})
     return {"link_token": plaid("/link/token/create", **payload)["link_token"]}
 
 
