@@ -23,6 +23,9 @@ Transactions plus Recurring Transactions access. Leave `PLAID_WEBHOOK_URL` blank
 initial and manually requested syncs. Run `./start-plaid-dev.sh` instead of `./start-dev.sh` to start the web app,
 API, and worker together.
 
+Run `./stop-dev.sh` from the repository root to stop this checkout's web server, API,
+worker, and their child processes. Use `./stop-dev.sh --dry-run` to preview the process IDs.
+
 To run each process separately:
 
 ```sh
