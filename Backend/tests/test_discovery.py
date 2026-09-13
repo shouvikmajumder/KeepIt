@@ -47,6 +47,8 @@ class CurrencyTests(unittest.TestCase):
         responses = {
             "/accounts/get": {"accounts": [{"account_id": "card", "name": "Card", "mask": "1234",
                 "type": "credit", "balances": {"iso_currency_code": "USD", "current": 123}}], "item": {}},
+            "/transactions/sync": {"added": [], "modified": [], "removed": [],
+                "next_cursor": "cursor", "has_more": False},
             "/transactions/recurring/get": {"outflow_streams": [self.stream]},
         }
         observations = []

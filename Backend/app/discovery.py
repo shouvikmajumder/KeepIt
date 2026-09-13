@@ -1,4 +1,4 @@
-"""Reduce provider data to the fields needed for subscription review."""
+"""Reduce provider streams to the fields needed for automatic recurring tracking."""
 from decimal import Decimal, InvalidOperation
 from datetime import date
 from psycopg.types.json import Jsonb
@@ -81,37 +81,57 @@ def store_stream(db, connection: dict, stream: dict):
         values (%s,%s,%s) on conflict(connection_id,stream_id) do update
         set observation=excluded.observation returning id,decision,subscription_id""",
         (connection["id"], stream["stream_id"], Jsonb(data))).fetchone()
-    if candidate["decision"] == "pending" and candidate["subscription_id"] and (
-            not data["eligible"] or not data["next_renewal_date"]):
-        # Delete only an unconfirmed provisional row; retain the pending candidate.
-        db.execute("""delete from public.subscriptions where id=%s and user_id=%s
-            and status='pending_review'""", (candidate["subscription_id"], connection["user_id"]))
-        return data
-    if not candidate["subscription_id"]:
-        # A stream is provisional until the user confirms it. Ignored streams
-        # intentionally remain candidate-only so later syncs never recreate
-        # them without the user's involvement.
-        if candidate["decision"] != "pending" or not data["eligible"]:
+    auto_track = (data["eligible"] and data["confidence"] == "strong"
+                  and data["payment_type"] in ("subscription", "bill")
+                  and data["next_renewal_date"] is not None)
+    recurring_cost = (data.get("average_amount") if data["payment_type"] == "bill" else None) or data["cost"]
+    existing = db.execute("select * from public.subscriptions where id=%s and user_id=%s for update",
+                          (candidate["subscription_id"], connection["user_id"])).fetchone() \
+        if candidate["subscription_id"] else None
+
+    # Old provisional rows are either promoted automatically or removed. An
+    # ignored candidate remains hidden permanently and is never recreated.
+    if existing and existing["status"] == "pending_review":
+        if not auto_track or candidate["decision"] == "ignored":
+            db.execute("delete from public.subscriptions where id=%s and user_id=%s",
+                       (existing["id"], connection["user_id"]))
+            return data
+        db.execute("update public.subscriptions set status='active',auto_detected=true where id=%s",
+                   (existing["id"],))
+        db.execute("update keepit_private.candidates set decision='confirmed' where id=%s", (candidate["id"],))
+        existing["status"] = "active"
+        existing["auto_detected"] = True
+
+    if not existing:
+        if candidate["decision"] != "pending" or not auto_track:
             return data
         try:
-            form = SubscriptionCreate(name=data["name"], cost=data["cost"], currency=data["currency"],
+            form = SubscriptionCreate(name=data["name"], cost=recurring_cost, currency=data["currency"],
                 billing_interval=data["billing_interval"], next_renewal_date=data["next_renewal_date"],
                 payment_type=data["payment_type"])
         except ValidationError:
             return data
         sub_id = db.execute("""insert into public.subscriptions
             (user_id,name,cost,next_renewal_date,recurrence_anchor,billing_interval,status,source,
-             connection_id,candidate_id,provider_observation,payment_type)
-            values (%s,%s,%s,%s,%s,%s,'pending_review','plaid',%s,%s,%s,%s) returning id""",
+             connection_id,candidate_id,provider_observation,payment_type,auto_detected)
+            values (%s,%s,%s,%s,%s,%s,'active','plaid',%s,%s,%s,%s,true) returning id""",
             (connection["user_id"], form.name, form.cost, form.next_renewal_date,
              form.next_renewal_date, form.billing_interval, connection["id"], candidate["id"], Jsonb(data), form.payment_type)).fetchone()["id"]
-        db.execute("update keepit_private.candidates set subscription_id=%s where id=%s", (sub_id, candidate["id"]))
+        db.execute("update keepit_private.candidates set subscription_id=%s,decision='confirmed' where id=%s",
+                   (sub_id, candidate["id"]))
         return data
     # Observation updates are separate from overrides, so refreshes respect edits.
     db.execute("update public.subscriptions set provider_observation=%s where id=%s and user_id=%s",
-               (Jsonb(data), candidate["subscription_id"], connection["user_id"]))
+               (Jsonb(data), existing["id"], connection["user_id"]))
+    # Only records created by automation are withdrawn when evidence weakens.
+    # Previously user-confirmed records remain stable.
+    if existing.get("auto_detected") and not auto_track:
+        db.execute("update public.subscriptions set status='inactive' where id=%s and user_id=%s",
+                   (existing["id"], connection["user_id"]))
+        return data
     if not data["eligible"]:
         return data
+    status = "active" if existing.get("auto_detected") and auto_track else existing["status"]
     db.execute("""update public.subscriptions set
         name=coalesce(user_overrides->>'name', %s),
         cost=coalesce(user_overrides->>'cost', %s)::numeric,
@@ -119,7 +139,11 @@ def store_stream(db, connection: dict, stream: dict):
         payment_type=coalesce(user_overrides->>'payment_type', %s),
         next_renewal_date=coalesce(user_overrides->>'next_renewal_date', %s, next_renewal_date::text)::date,
         recurrence_anchor=coalesce(user_overrides->>'recurrence_anchor',
-          user_overrides->>'next_renewal_date', %s, recurrence_anchor::text)::date
+          user_overrides->>'next_renewal_date', %s, recurrence_anchor::text)::date,
+        status=coalesce(user_overrides->>'status', %s)
         where id=%s and user_id=%s""", (data["name"], data["cost"], data["billing_interval"], data["payment_type"],
-        data["next_renewal_date"], data["next_renewal_date"], candidate["subscription_id"], connection["user_id"]))
+        data["next_renewal_date"], data["next_renewal_date"], status, existing["id"], connection["user_id"]))
+    if recurring_cost != data["cost"]:
+        db.execute("""update public.subscriptions set cost=coalesce(user_overrides->>'cost', %s)::numeric
+            where id=%s and user_id=%s""", (recurring_cost, existing["id"], connection["user_id"]))
     return data

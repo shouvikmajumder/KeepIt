@@ -22,12 +22,17 @@ class TrackingAPI(DatabaseCase):
         self.assertEqual(result.status_code, 201, result.text)
         return result.json()
 
-    def test_create_edit_and_monthly_equivalent(self):
+    def test_readiness_accepts_the_migrated_schema(self):
+        response = self.client.get("/ready")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json(), {"status": "ready"})
+
+    def test_create_edit_and_recurring_estimate(self):
         sub = self.create()
         self.create(name="Annual", cost="120", billing_interval="annual")
-        result = self.client.get("/dashboard?today=2026-02-01").json()
-        self.assertEqual(result["monthly_equivalent"], "22.00")
-        self.assertEqual(result["active_count"], 2)
+        result = self.client.get("/dashboard?month=2026-02").json()
+        self.assertEqual(result["subscription_monthly_estimate"], "22.00")
+        self.assertEqual(result["spending_total"], "0.00")
         payload = {key: sub[key] for key in ("name", "cost", "billing_interval", "currency")}
         payload.update(next_renewal_date="2026-02-28", status="active")
         edited = self.client.patch(f"/subscriptions/{sub['id']}?today=2026-02-01", json=payload)
@@ -35,7 +40,7 @@ class TrackingAPI(DatabaseCase):
         self.assertEqual(edited.json()["recurrence_anchor"], "2026-01-31")
         payload["status"] = "inactive"
         self.client.patch(f"/subscriptions/{sub['id']}?today=2026-02-01", json=payload)
-        self.assertEqual(self.client.get("/dashboard").json()["monthly_equivalent"], "10.00")
+        self.assertEqual(self.client.get("/dashboard?month=2026-02").json()["subscription_monthly_estimate"], "10.00")
 
     def test_ownership_and_validation(self):
         sub = self.create()
@@ -64,3 +69,12 @@ class TrackingAPI(DatabaseCase):
         self.assertEqual(self.client.patch(f"/subscriptions/{sub['id']}", json=payload).json()["payment_type"], "subscription")
         payload["payment_type"] = "transfer"
         self.assertEqual(self.client.patch(f"/subscriptions/{sub['id']}", json=payload).status_code, 422)
+
+    def test_recurring_visibility_is_reversible(self):
+        sub = self.create()
+        payload = {key: sub[key] for key in
+                   ("name", "cost", "billing_interval", "currency", "next_renewal_date", "payment_type", "status")}
+        payload["hidden"] = True
+        hidden = self.client.patch(f"/subscriptions/{sub['id']}", json=payload)
+        self.assertTrue(hidden.json()["hidden"])
+        self.assertEqual(self.client.get("/dashboard?month=2026-02").json()["subscription_monthly_estimate"], "0.00")

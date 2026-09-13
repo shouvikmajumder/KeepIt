@@ -52,13 +52,13 @@ def main():
             sid = first.json()["id"]
             annual = client.post("/subscriptions", headers=accounts[0][2], json={**payload, "name": "Smoke annual", "cost": "120.00", "billing_interval": "annual"})
             assert annual.status_code == 201
-            assert client.get("/dashboard", headers=accounts[0][2]).json()["monthly_equivalent"] == "22.00"
+            assert client.get("/dashboard", headers=accounts[0][2]).json()["subscription_monthly_estimate"] == "22.00"
             assert client.get("/subscriptions", headers=accounts[1][2]).json() == []
             assert client.patch(f"/subscriptions/{sid}", headers=accounts[1][2], json=payload).status_code == 404
             assert client.delete(f"/subscriptions/{sid}", headers=accounts[1][2]).status_code == 204
             edited = client.patch(f"/subscriptions/{sid}", headers=accounts[0][2], json={**payload, "status": "inactive"})
             assert edited.status_code == 200
-            assert client.get("/dashboard", headers=accounts[0][2]).json()["monthly_equivalent"] == "10.00"
+            assert client.get("/dashboard", headers=accounts[0][2]).json()["subscription_monthly_estimate"] == "10.00"
             assert client.delete(f"/subscriptions/{sid}", headers=accounts[0][2]).status_code == 204
             assert client.delete(f"/subscriptions/{annual.json()['id']}", headers=accounts[0][2]).status_code == 204
             print("PASS: live login, JWT verification, database readiness, CRUD, totals, and user isolation")

@@ -5,7 +5,7 @@ Keep service aliases narrow: a marketplace or payment processor is not a service
 """
 import re
 
-CLASSIFIER_VERSION = 1
+CLASSIFIER_VERSION = 2
 BILL_CATEGORIES = {
     "RENT_AND_UTILITIES_RENT", "RENT_AND_UTILITIES_GAS_AND_ELECTRICITY",
     "RENT_AND_UTILITIES_WATER", "RENT_AND_UTILITIES_SEWAGE_AND_WASTE_MANAGEMENT",
@@ -63,7 +63,8 @@ def classify(stream):
         mature = stream.get("status") == "MATURE"
         minimum = {"MONTHLY": 3, "ANNUALLY": 2}.get(stream.get("frequency"))
         enough = minimum is not None and count >= minimum
-        type_evidence = (service and kind == "subscription") or (kind == "bill" and reliable)
+        type_evidence = ((service and kind == "subscription")
+                         or (kind in ("subscription", "bill") and reliable))
         if mature and enough and type_evidence:
             confidence = "strong"
             codes.append("mature_history")

@@ -4,11 +4,9 @@ from db_case import DatabaseCase
 from app.classification import CLASSIFIER_VERSION
 from app.discovery import observation, store_stream
 from app.postgres import transaction
-from app.routers.review import review, Review
 from app.routers.dashboard import dashboard
 from app.routers.subscriptions import update_subscription
 from app.schemas import SubscriptionUpdate
-from fastapi import HTTPException
 
 
 def stream(**changes):
@@ -47,7 +45,7 @@ CASES = [
     ("duplicate history", {"transaction_ids": ["one", "one", "two"]}, "subscription", "possible"),
     ("missing history", {"transaction_ids": None}, "subscription", "possible"),
     ("weak bill category", {"merchant_name": "Power", "personal_finance_category": category("RENT_AND_UTILITIES", "RENT_AND_UTILITIES_WATER", "LOW")}, "bill", "possible"),
-    ("category is not membership", {"merchant_name": "Local gym", "personal_finance_category": category("PERSONAL_CARE", "PERSONAL_CARE_GYMS_AND_FITNESS_CENTERS")}, "subscription", "possible"),
+    ("category establishes membership", {"merchant_name": "Local gym", "personal_finance_category": category("PERSONAL_CARE", "PERSONAL_CARE_GYMS_AND_FITNESS_CENTERS")}, "subscription", "strong"),
     ("conflict", {"personal_finance_category": category("RENT_AND_UTILITIES", "RENT_AND_UTILITIES_RENT")}, "unknown", "possible"),
     ("unknown category", {"merchant_name": "Unknown", "personal_finance_category": category("NEW", "NEW_CATEGORY")}, "unknown", "possible"),
     ("inactive", {"is_active": False}, "unknown", "excluded"),
@@ -79,7 +77,7 @@ class ClassificationTests(unittest.TestCase):
                 self.assertFalse(data["eligible"])
                 self.assertIn("monthly and annual", data["reason"])
 
-    def test_missing_or_invalid_dates_can_be_supplied_during_review(self):
+    def test_missing_or_invalid_dates_are_not_valid_automatic_renewal_dates(self):
         for value in (None, "not-a-date", "1800-01-01", "2027-02-30"):
             data = observation(stream(predicted_next_date=value), [{"id": "card"}])
             self.assertIsNone(data["next_renewal_date"])
@@ -117,58 +115,55 @@ class ClassificationDatabaseTests(DatabaseCase):
         excluded = stream(personal_finance_category=category("TRANSFER_OUT", "TRANSFER_OUT_ACCOUNT_TRANSFER"))
         updated = self.save(connection, excluded)
         self.assertEqual(initial["id"], updated["id"])
-        self.assertIsNone(updated["subscription_id"])
-        self.assertEqual(updated["decision"], "pending")
-        self.assertEqual(dashboard(user_id=self.owner)["pending_review_count"], 0)
-        with self.assertRaises(HTTPException):
-            review(updated["id"], Review(action="confirm", payment_type="bill"), self.owner)
+        self.assertIsNotNone(updated["subscription_id"])
+        self.assertEqual(updated["decision"], "confirmed")
+        with transaction() as db:
+            self.assertEqual(db.execute("select status from public.subscriptions where id=%s",
+                (updated["subscription_id"],)).fetchone()["status"], "inactive")
         restored = self.save(connection, stream())
         self.assertIsNotNone(restored["subscription_id"])
         self.assertEqual(restored["subscription_id"], self.save(connection, stream())["subscription_id"])
-        self.assertEqual(dashboard(user_id=self.owner)["monthly_equivalent"], "0.00")
+        self.assertEqual(dashboard(user_id=self.owner)["subscription_monthly_estimate"], "15.00")
 
     def test_kept_type_and_values_survive_reclassification_and_edits(self):
         connection = self.prepared()
-        pending = self.save(connection, stream())
-        kept = review(pending["id"], Review(action="confirm", payment_type="bill"), self.owner)
-        self.assertEqual(kept["subscription"]["payment_type"], "bill")
-        update_subscription(kept["subscription_id"], SubscriptionUpdate(name="My service", cost="18.00",
+        detected = self.save(connection, stream())
+        update_subscription(detected["subscription_id"], SubscriptionUpdate(name="My service", cost="18.00",
             next_renewal_date="2027-01-31", payment_type="subscription"), self.owner)
         self.save(connection, stream(is_active=False))
         self.save(connection, stream(merchant_name="Power", personal_finance_category=category("RENT_AND_UTILITIES", "RENT_AND_UTILITIES_WATER")))
         with transaction() as db:
-            row = db.execute("select * from public.subscriptions where id=%s", (kept["subscription_id"],)).fetchone()
+            row = db.execute("select * from public.subscriptions where id=%s", (detected["subscription_id"],)).fetchone()
         self.assertEqual((row["status"], row["payment_type"], row["name"], str(row["cost"])),
                          ("active", "subscription", "My service", "18.00"))
         self.assertEqual(row["provider_observation"]["payment_type"], "bill")
 
-    def test_candidate_without_row_requires_type_and_date_then_returns_record(self):
+    def test_uncertain_candidate_stays_hidden_until_it_becomes_strong(self):
         connection = self.prepared()
         pending = self.save(connection, stream(merchant_name="Unknown", predicted_next_date=None))
         self.assertIsNone(pending["subscription_id"])
-        self.assertEqual(dashboard(user_id=self.owner)["pending_review_count"], 1)
-        for body in (Review(action="confirm"), Review(action="confirm", payment_type="bill")):
-            with self.assertRaises(HTTPException):
-                review(pending["id"], body, self.owner)
-        result = review(pending["id"], Review(action="confirm", payment_type="bill", next_renewal_date="2027-01-31"), self.owner)
-        self.assertEqual(result["subscription"]["status"], "active")
-        self.assertEqual(result, review(pending["id"], Review(action="confirm"), self.owner))
-        self.assertEqual(dashboard(user_id=self.owner)["pending_review_count"], 0)
+        self.assertEqual(dashboard(user_id=self.owner)["subscription_monthly_estimate"], "0.00")
+        promoted = self.save(connection, stream(stream_id="sample"))
+        self.assertIsNotNone(promoted["subscription_id"])
+        self.assertEqual(promoted["decision"], "confirmed")
 
-    def test_missing_date_on_refresh_removes_pending_row_not_candidate(self):
+    def test_missing_date_on_refresh_deactivates_automatic_row(self):
         connection = self.prepared()
         before = self.save(connection, stream())
         after = self.save(connection, stream(predicted_next_date=None))
         self.assertEqual(before["id"], after["id"])
-        self.assertIsNone(after["subscription_id"])
+        self.assertEqual(before["subscription_id"], after["subscription_id"])
+        with transaction() as db:
+            self.assertEqual(db.execute("select status from public.subscriptions where id=%s",
+                (after["subscription_id"],)).fetchone()["status"], "inactive")
 
     def test_migration_preserves_records_and_decisions_and_queues_connections(self):
         from scripts.configure_tracking import inspect
         connection = self.prepared()
         pending = self.save(connection, stream())
-        review(pending["id"], Review(action="confirm"), self.owner)
         dismissed = self.save(connection, stream(stream_id="dismissed"))
-        review(dismissed["id"], Review(action="ignore"), self.owner)
+        with transaction() as db:
+            db.execute("update keepit_private.candidates set decision='ignored' where id=%s", (dismissed["id"],))
         with transaction() as db:
             db.execute("alter table public.subscriptions drop column payment_type")
             before = db.execute("select * from public.subscriptions order by id").fetchall()

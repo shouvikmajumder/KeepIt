@@ -35,11 +35,3 @@ def disconnect(db, connection_id, user_id):
 def remove_connection(connection_id: UUID, user_id: str = Depends(get_current_user_id)):
     with transaction() as db:
         disconnect(db, connection_id, user_id)
-
-
-@router.get("/subscription-candidates")
-def candidates(user_id: str = Depends(get_current_user_id)):
-    with transaction() as db:
-        return db.execute("""select d.id,d.connection_id,d.observation,d.decision,d.subscription_id
-            from keepit_private.candidates d join keepit_private.connections c on c.id=d.connection_id
-            where c.user_id=%s order by d.id""", (user_id,)).fetchall()

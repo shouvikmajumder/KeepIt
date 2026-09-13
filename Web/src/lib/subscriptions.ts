@@ -13,6 +13,8 @@ export type Subscription = {
   recurrence_anchor: string;
   next_renewal_date: string;
   created_at: string;
+  hidden: boolean;
+  account_label: string | null;
 };
 export type SubscriptionInput = Pick<
   Subscription,
@@ -24,18 +26,9 @@ export type SubscriptionInput = Pick<
   | "payment_type"
 >;
 export type SubscriptionUpdate = SubscriptionInput &
-  Pick<Subscription, "status">;
-export type Dashboard = {
-  monthly_equivalent: string;
-  active_count: number;
-  pending_review_count: number;
-  currency: "USD";
-  upcoming: Subscription[];
-};
+  Pick<Subscription, "status"> & { hidden?: boolean };
 export const listSubscriptions = (signal?: AbortSignal) =>
   apiFetch<Subscription[]>(`/subscriptions?today=${localDate()}`, { signal });
-export const getDashboard = (signal?: AbortSignal) =>
-  apiFetch<Dashboard>(`/dashboard?today=${localDate()}`, { signal });
 export const createSubscription = (input: SubscriptionInput) =>
   apiFetch<Subscription>("/subscriptions", {
     method: "POST",

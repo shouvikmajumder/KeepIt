@@ -54,18 +54,16 @@ function ConnectionCard({
   row,
   busy,
   onReconnect,
-  onRefresh,
   onDisconnect,
 }: {
   row: Connection;
   busy: boolean;
   onReconnect: (id: string) => void;
-  onRefresh: (id: string) => void;
   onDisconnect: (id: string) => void;
 }) {
   const state = {
-    syncing: "Looking for recurring payments…",
-    ready: "Discovery complete",
+    syncing: "Importing and organizing transactions…",
+    ready: "Spending is up to date",
     error: "Updates are delayed. Try again shortly.",
     needs_reconnect: "Reconnect to resume updates.",
   }[row.sync_status];
@@ -86,9 +84,6 @@ function ConnectionCard({
             Reconnect
           </button>
         )}
-        <button className="button secondary" disabled={busy} onClick={() => onRefresh(row.id)}>
-          Check for updates
-        </button>
         <button className="text-button danger-text" disabled={busy} onClick={() => onDisconnect(row.id)}>
           Disconnect
         </button>
@@ -122,20 +117,8 @@ export function Connections() {
     setBusy(false);
     await reload();
   }
-  async function refresh(id: string) {
-    setBusy(true);
-    setError(null);
-    try {
-      await refreshConnection(id);
-      await reload();
-    } catch (error) {
-      setError(errorMessage(error));
-    } finally {
-      setBusy(false);
-    }
-  }
   async function remove(id: string) {
-    if (!window.confirm("Disconnect this account? Confirmed subscriptions will remain as manual records.")) return;
+    if (!window.confirm("Disconnect this account? Imported expenses will be removed. Recurring payments will remain as manual records.")) return;
     setBusy(true);
     setError(null);
     try {
@@ -154,7 +137,7 @@ export function Connections() {
           {busy ? "Opening Plaid…" : "Connect bank or card"}
         </button>
       </PageHeading>
-      <p className="page-intro">Connect through Plaid to find recurring charges. Keep or dismiss discovered payments on your Subscriptions & bills page.</p>
+      <p className="page-intro">Connect through Plaid and KeepIt will organize your posted expenses, subscriptions, and bills automatically.</p>
       <Notice error={error || loadError} retry={error || loadError ? reload : undefined} />
       {linkToken && (
         <PlaidLauncher
@@ -176,10 +159,10 @@ export function Connections() {
               <h2>Connected accounts</h2>
               <p className="muted">Plaid access can be removed at any time.</p>
             </div>
-            <Link to="/subscriptions">View subscriptions</Link>
+            <Link to="/subscriptions">View recurring payments</Link>
           </header>
           {data?.length ? data.map((row) => (
-            <ConnectionCard key={row.id} row={row} busy={busy} onReconnect={startLink} onRefresh={refresh} onDisconnect={remove} />
+            <ConnectionCard key={row.id} row={row} busy={busy} onReconnect={startLink} onDisconnect={remove} />
           )) : (
             <p className="empty-inline">No accounts connected yet.</p>
           )}

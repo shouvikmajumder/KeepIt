@@ -1,3 +1,4 @@
+from datetime import date
 from unittest.mock import patch
 from db_case import DatabaseCase
 from app.postgres import transaction, enqueue
@@ -9,6 +10,33 @@ from test_classification import stream
 
 
 class WorkerTests(DatabaseCase):
+    def test_transaction_pages_are_applied_and_cursor_is_saved(self):
+        connection = self.queued()
+        provider_transaction = {"transaction_id": "tx", "account_id": "a", "date": date.today().isoformat(),
+                       "name": "Raw", "merchant_name": "Merchant", "amount": 12,
+                       "iso_currency_code": "USD", "pending": False,
+                       "personal_finance_category": {"primary": "GENERAL_MERCHANDISE"}}
+        responses = [
+            {"added": [provider_transaction], "modified": [], "removed": [], "next_cursor": "one", "has_more": True},
+            {"added": [], "modified": [{**provider_transaction, "amount": 14}], "removed": [], "next_cursor": "two", "has_more": False},
+        ]
+        def provider(path, **_):
+            if path == "/accounts/get":
+                return {"accounts": [{"account_id": "a", "name": "Card", "type": "credit",
+                    "balances": {"iso_currency_code": "USD"}}], "item": {}}
+            if path == "/transactions/sync":
+                return responses.pop(0)
+            return {"outflow_streams": []}
+        with patch("app.worker.decrypt", return_value="token"), patch("app.worker.plaid", side_effect=provider):
+            self.assertTrue(run_once())
+        with transaction() as db:
+            row = db.execute("select amount from keepit_private.transactions where connection_id=%s",
+                             (connection["id"],)).fetchone()
+            cursor = db.execute("select transaction_cursor from keepit_private.connections where id=%s",
+                                (connection["id"],)).fetchone()["transaction_cursor"]
+        self.assertEqual(str(row["amount"]), "14.00")
+        self.assertEqual(cursor, "two")
+
     def test_failed_refresh_rolls_back_partial_reclassification(self):
         connection = self.queued()
         connection["accounts"] = [{"id": "card"}]
@@ -48,6 +76,8 @@ class WorkerTests(DatabaseCase):
             enqueue(db, connection["id"])
         responses = {
             "/accounts/get": {"accounts": [{"account_id": "a", "name": "Card", "mask": "1234", "type": "credit"}], "item": {}},
+            "/transactions/sync": {"added": [], "modified": [], "removed": [],
+                "next_cursor": "cursor", "has_more": False},
             "/transactions/recurring/get": {"outflow_streams": []},
         }
         with patch("app.worker.decrypt", return_value="test-token"), patch("app.worker.plaid", side_effect=lambda path, **_: responses[path]):

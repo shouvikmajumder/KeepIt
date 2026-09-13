@@ -1,7 +1,7 @@
 # KeepIt API
 
 FastAPI service for the KeepIt web app. Authenticated routes verify Supabase JWTs through JWKS.
-Tracking uses DATABASE_URL through psycopg, and every user operation is scoped to its verified owner.
+Spending and recurring tracking use DATABASE_URL through psycopg, and every user operation is scoped to its verified owner.
 The Supabase service-role client is used for account administration and stays server-only.
 
 ## Local setup
@@ -18,19 +18,15 @@ Required settings: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and DATABASE_URL.
 Use the existing project's direct/session-pooler PostgreSQL URL; encode password characters and enable SSL.
 ALLOWED_ORIGINS defaults to the local web app's localhost and 127.0.0.1 origins on port 5173.
 
-supabase/schema.sql is for new databases only. Migrations 001–005 extend existing tracking tables.
+supabase/schema.sql is for new databases only. Migrations 001–006 extend existing tracking tables.
 scripts/configure_tracking.py --apply snapshots the subscriptions table and applies recognized missing
 migrations atomically. See the root README for its scope and preservation checks.
 
-Stop the old API/worker before applying migration 005, then restart with the new code. It queues connections
-for classification using fresh PFCv2 evidence; existing subscription values and user decisions are preserved.
+Stop the old API/worker before applying migration 006, then restart with the new code. It queues connections
+for transaction backfill and fresh PFCv2 evidence; existing subscription values and decisions are preserved.
 Subscriptions accept `payment_type` (`subscription`, `bill`, `unknown`); manual creation defaults to subscription.
-Review accepts an optional `payment_type` (`subscription` or `bill`) and `next_renewal_date`, and returns the kept
-`subscription` record alongside its ID/decision. Unclassified discoveries require a type before confirmation.
-Candidate observations expose evidence labels, explanations, reason codes, category metadata, payment count,
-original frequency, and classifier version. `eligible` means technically actionable and not excluded, not certain.
-Missing dates can be supplied at review. Dashboard discovery counts include actionable pending candidates,
-including candidates that do not yet have provisional subscription rows.
+Strong recurring matches are added automatically. Uncertain candidates remain internal and do not block the
+transaction import. Imported expenses and recurring items support reversible hide and restore controls.
 
 ## Endpoints
 
@@ -40,11 +36,11 @@ including candidates that do not yet have provisional subscription rows.
 | GET /ready | Database/schema readiness |
 | GET/POST /subscriptions | List/create subscriptions |
 | PATCH/DELETE /subscriptions/{id} | Update/remove a subscription |
-| GET /dashboard | Monthly equivalent and upcoming renewals |
+| GET /dashboard?month=YYYY-MM | Posted spending, categories, comparison, and recurring estimates |
+| GET /expenses | Paginated expenses with month, account, category, and visibility filters |
+| PATCH /expenses/{id} | Hide or restore an imported expense |
 | POST /plaid/link-token, /plaid/exchange | Start and finish a browser Plaid Link connection |
 | GET/DELETE /connections | List or revoke connected accounts |
-| GET /subscription-candidates | List provisional recurring-payment discoveries |
-| POST /subscription-candidates/{id}/review | Confirm, ignore, or match a discovery |
 | DELETE /account | Revoke existing bank access and delete the account |
 
 Interactive API documentation is at http://localhost:8000/docs. For local Plaid Sandbox development, start the

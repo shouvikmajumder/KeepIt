@@ -16,10 +16,10 @@ import { Brand, Loading, Notice } from "./components/ui";
 import { AuthCallback, AuthPage } from "./pages/auth";
 import {
   NewSubscription,
-  Overview,
   SubscriptionDetails,
-  Subscriptions,
 } from "./pages/tracking";
+import { Overview } from "./pages/spending";
+import { Subscriptions } from "./pages/recurring";
 import { Settings } from "./pages/settings";
 import { Connections } from "./pages/connections";
 import "./styles.css";
@@ -53,10 +53,10 @@ function Shell() {
         <p className="nav-label">Workspace</p>
         <nav aria-label="Main navigation">
           <NavLink to="/overview">
-            <span aria-hidden="true">◫</span>Overview
+            <span aria-hidden="true">◫</span>Spending
           </NavLink>
           <NavLink to="/subscriptions">
-            <span aria-hidden="true">≡</span>Subscriptions & bills
+            <span aria-hidden="true">≡</span>Recurring
           </NavLink>
           <NavLink to="/connections">
             <span aria-hidden="true">▣</span>Connections

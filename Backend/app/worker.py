@@ -7,6 +7,35 @@ from .discovery import store_stream
 from .classification import CLASSIFIER_VERSION
 from .plaid_client import PlaidError, plaid, decrypt, require_plaid
 from .postgres import transaction
+from .transactions import prune_transactions, remove_transaction, store_transaction
+
+
+def sync_transactions(db, connection, token, accounts):
+    cursor = connection.get("transaction_cursor")
+    complete = True
+    while True:
+        body = {"access_token": token, "count": 500,
+                "options": {"personal_finance_category_version": "v2"}}
+        if cursor:
+            body["cursor"] = cursor
+        response = plaid("/transactions/sync", **body)
+        complete = response.get("transactions_update_status", "HISTORICAL_UPDATE_COMPLETE") == "HISTORICAL_UPDATE_COMPLETE"
+        next_cursor = response.get("next_cursor")
+        if not next_cursor:
+            raise PlaidError("PRODUCT_NOT_READY")
+        for item in response.get("added", []):
+            store_transaction(db, connection, item, accounts)
+        for item in response.get("modified", []):
+            store_transaction(db, connection, item, accounts)
+        for item in response.get("removed", []):
+            remove_transaction(db, connection["id"], item.get("transaction_id"))
+        cursor = next_cursor
+        if not response.get("has_more"):
+            break
+    db.execute("update keepit_private.connections set transaction_cursor=%s where id=%s",
+               (cursor, connection["id"]))
+    prune_transactions(db, connection["id"])
+    return complete
 
 
 def sync(db, connection):
@@ -24,16 +53,27 @@ def sync(db, connection):
         institution_name=%s where id=%s""",
         (Jsonb([{"id": a["id"], "label": a["label"]} for a in accounts]), institution_id, name, connection["id"]))
     connection["accounts"] = accounts
-    result = plaid("/transactions/recurring/get", access_token=token,
-                   options={"personal_finance_category_version": "v2"})
+    account_map = {account["id"]: account for account in accounts}
+    complete = sync_transactions(db, connection, token, account_map)
+    result = {"outflow_streams": []}
+    if complete:
+        try:
+            result = plaid("/transactions/recurring/get", access_token=token,
+                           options={"personal_finance_category_version": "v2"})
+        except PlaidError as exc:
+            if exc.code != "PRODUCT_NOT_READY":
+                raise
+            complete = False
     counts = Counter()
     for stream in result["outflow_streams"]:
         data = store_stream(db, connection, stream)
         if data:
             counts[(data["payment_type"], data["confidence"])] += 1
-    db.execute("""update keepit_private.connections set sync_status='ready',
-        last_synced_at=now(),error_code=null where id=%s""", (connection["id"],))
+    db.execute("""update keepit_private.connections set sync_status=%s,
+        last_synced_at=now(),error_code=null where id=%s""",
+        ("ready" if complete else "syncing", connection["id"]))
     logging.info("Recurring classification v%s counts=%s", CLASSIFIER_VERSION, dict(counts))
+    return complete
 
 
 def run_once():
@@ -47,7 +87,7 @@ def run_once():
             return False
         try:
             with db.transaction():
-                sync(db, connection)
+                complete = sync(db, connection)
         except Exception as exc:
             code = exc.code if isinstance(exc, PlaidError) else "INTERNAL_ERROR"
             pending = code == "PRODUCT_NOT_READY"
@@ -61,8 +101,9 @@ def run_once():
             logging.warning("Discovery will retry: %s", code)
         else:
             # Daily reconciliation also catches a missed webhook.
+            delay = "24 hours" if complete else "30 seconds"
             db.execute("""update keepit_private.jobs set attempts=0,
-                available_at=now()+interval '24 hours' where connection_id=%s""", (connection["id"],))
+                available_at=now()+(%s)::interval where connection_id=%s""", (delay, connection["id"]))
         return True
 
 

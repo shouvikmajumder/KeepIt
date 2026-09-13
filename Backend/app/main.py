@@ -8,11 +8,11 @@ Interactive docs live at http://localhost:8000/docs.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import subscriptions, dashboard, plaid_link, plaid_webhook
+from .routers import subscriptions, dashboard, expenses, plaid_link, plaid_webhook
 from .plaid_client import PlaidError
 from fastapi.responses import JSONResponse
 from .config import settings
-from .routers import connections, review, account, readiness
+from .routers import connections, account, readiness
 
 app = FastAPI(title="KeepIt API")
 
@@ -33,10 +33,10 @@ def health():
 
 app.include_router(subscriptions.router)
 app.include_router(dashboard.router)
+app.include_router(expenses.router)
 app.include_router(plaid_link.router)
 app.include_router(plaid_webhook.router)
 app.include_router(connections.router)
-app.include_router(review.router)
 app.include_router(account.router)
 app.include_router(readiness.router)
 

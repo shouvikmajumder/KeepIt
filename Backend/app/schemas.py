@@ -46,6 +46,8 @@ class SubscriptionOut(BaseModel):
     source: Literal["manual", "plaid"]
     recurrence_anchor: date
     payment_type: Literal["subscription", "bill", "unknown"]
+    hidden: bool
+    account_label: str | None = None
 
 
 class SubscriptionUpdate(SubscriptionCreate):
@@ -53,3 +55,4 @@ class SubscriptionUpdate(SubscriptionCreate):
     payment_type: Literal["subscription", "bill", "unknown"] | None = None
     # Send a complete editable form; ownership and provider fields stay server-side.
     status: Literal["active", "inactive", "pending_review"] = "active"
+    hidden: bool | None = None

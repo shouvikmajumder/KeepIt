@@ -23,7 +23,7 @@ from ..recurrence import project
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 
 # The columns the app reads back — kept in one place to match SubscriptionOut.
-_COLUMNS = "id,name,cost,next_renewal_date,created_at,billing_interval,currency,status,source,recurrence_anchor,payment_type"
+_COLUMNS = "id,name,cost,next_renewal_date,created_at,billing_interval,currency,status,source,recurrence_anchor,payment_type,hidden,provider_observation"
 
 
 @router.get("", response_model=list[SubscriptionOut])
@@ -81,6 +81,8 @@ def update_subscription(sub_id: UUID, body: SubscriptionUpdate,
         payload = body.model_dump(mode="json")
         if payload["payment_type"] is None:
             payload.pop("payment_type")
+        if payload["hidden"] is None:
+            payload.pop("hidden")
         # Locking prevents a provider refresh from overwriting edits mid-save.
         current = project(previous, today or date.today())
         if (payload["next_renewal_date"] != str(current["next_renewal_date"])

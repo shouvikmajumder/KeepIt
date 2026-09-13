@@ -1,6 +1,6 @@
 # KeepIt
 
-A desktop web app for tracking subscriptions and bills, monthly-equivalent spending, and estimated payments.
+A desktop web app that organizes connected-account expenses, subscriptions, bills, and estimated payments.
 React + TypeScript + Vite power the frontend; FastAPI and Supabase PostgreSQL power the API.
 Supabase handles email/password authentication. Tracking data is accessible through the API only.
 
@@ -41,7 +41,7 @@ Redirect configuration is a Supabase dashboard setting; a service-role key canno
 
 ## Database
 
-SQL lives in `Backend/supabase/`. On a **new** database, run `schema.sql` before migrations 001–005.
+SQL lives in `Backend/supabase/`. On a **new** database, run `schema.sql` before migrations 001–006.
 On the existing database, do not rerun the baseline or previously applied migrations.
 
 The inspection helper recognizes the existing baseline and complete migration states. Run it with `--apply`
@@ -57,10 +57,12 @@ The database password is different from the public key and service-role key.
 ## Current scope
 
 - Signup, login, email confirmation, password recovery, persistent browser sessions, and sign-out.
-- Add, edit, deactivate, and remove monthly/annual USD subscriptions and bills.
-- Monthly-equivalent spending and upcoming renewal estimates.
+- Automatic import of up to 24 months of posted USD expenses from connected accounts.
+- Calendar-month totals, category and account filters, prior-month comparison, and an expense ledger.
+- Automatic strong-match subscription and bill tracking with monthly-equivalent estimates.
+- Add, edit, hide, restore, deactivate, and remove monthly/annual USD subscriptions and bills.
 - Browser Plaid Link for US credit and depository accounts in local Sandbox development.
-- Classified Plaid discoveries appear in Subscriptions & bills with strong/uncertain evidence labels; users keep or dismiss them before they affect spending totals.
+- Strong Plaid recurring matches appear automatically; uncertain streams remain out of the recurring UI while their transactions remain ordinary expenses.
 - Account deletion, including revocation of any previously connected bank access.
 - Dark desktop UI with keyboard-accessible forms and confirmation dialogs.
 
@@ -70,15 +72,13 @@ with providers.
 
 ### Recurring-payment classification
 
-The worker requests PFCv2 categories and classifies recurring outflows using versioned, deterministic rules.
-Specific subscription-service names and reliable bill categories establish type; mature monthly streams need
-three distinct recorded payments (annual streams need two) for strong evidence. Category confidence alone
-does not establish a subscription. Transfers, debt repayments, fees, and reliable ordinary-purchase categories
-are excluded. Variable amounts do not disqualify bills. Ambiguous services remain visible as uncertain.
+The worker imports incremental transaction updates, requests PFCv2 categories, and classifies recurring outflows
+using versioned, deterministic rules. Specific services and reliable subscription or bill categories establish
+type; mature monthly streams need three distinct payments and annual streams need two. Transfers, repayments,
+and reliable ordinary purchases are excluded. Ambiguous services remain internal rather than interrupting users.
 
-Only monthly/annual USD payments can be kept. Unsupported frequencies keep their actual labels; unknown
-types and missing payment dates can be supplied inline. Keep/Dismiss updates individual rows without reloads.
-Payment type is editable and preserved across future bank refreshes, as are existing user decisions.
+Only strong monthly/annual USD recurring payments are added automatically. Users can hide or restore imported
+expenses and recurring items, and manual recurring entry remains available as a fallback.
 
 To upgrade an existing installation, stop the API/worker, then from `Backend` run:
 
@@ -87,10 +87,9 @@ To upgrade an existing installation, stop the API/worker, then from `Backend` ru
 .venv/bin/python scripts/configure_tracking.py --apply
 ```
 
-Migration 005 adds `payment_type` (existing records start unclassified) and queues existing connections for
-fresh evidence. Restart the API and worker with the new code. No relinking is necessary. Reconciliation may
-remove newly excluded **unconfirmed provisional** rows; candidate records remain, and kept payments are never
-deleted or deactivated by classification. A failed refresh rolls back all stream changes from that attempt.
+Migration 006 adds private transaction storage, per-connection cursors, and recurring visibility metadata. It
+queues existing connections for a full backfill; no relinking is necessary. Previously confirmed and manual
+payments remain intact. A failed refresh rolls back transaction, cursor, and recurring changes from that attempt.
 
 For rollback, stop the worker and restore the prior application code; leave the additive column in place.
 Do not restore an old tracking snapshot over later user decisions. Original candidate records remain available

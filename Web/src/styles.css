@@ -127,6 +127,98 @@ tbody tr:hover {
   font-size: 0.75rem;
   color: var(--muted);
 }
+.source-label.no-indent {
+  padding-left: 0;
+  margin-top: 0.3rem;
+}
+.refund {
+  color: #a3e4ca;
+}
+.month-control,
+.spending-toolbar,
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.month-control strong {
+  min-width: 10rem;
+  text-align: center;
+}
+.spending-toolbar {
+  justify-content: space-between;
+  margin: -1rem 0 1.5rem;
+}
+.spending-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.spending-toolbar select {
+  min-width: 220px;
+}
+.spending-metrics {
+  grid-template-columns: 1.2fr 1fr 1fr;
+}
+.workspace > .empty + .metrics {
+  margin-top: 1rem;
+}
+.spending-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.36fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.category-list {
+  padding: 0.75rem;
+}
+.category-list button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) 1.2fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  border: 0;
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.category-list button:hover,
+.category-list button.active {
+  background: #202731;
+}
+.category-list strong {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.category-bar {
+  height: 6px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #2b3543;
+}
+.category-bar i {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: inherit;
+  background: var(--accent);
+}
+.load-more {
+  display: flex;
+  justify-content: center;
+  padding: 1rem;
+  border-top: 1px solid var(--line);
+}
+.recurring-stack {
+  display: grid;
+  gap: 1rem;
+}
 .tabular {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -875,5 +967,8 @@ dialog .muted {
   }
   .workspace {
     padding: 2rem 1.5rem;
+  }
+  .spending-grid {
+    grid-template-columns: 1fr;
   }
 }

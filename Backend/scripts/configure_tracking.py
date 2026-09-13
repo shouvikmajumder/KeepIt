@@ -18,6 +18,7 @@ from app.config import settings
 BASE_COLUMNS = {"id", "user_id", "name", "cost", "next_renewal_date", "created_at"}
 TRACKING_COLUMNS = {"billing_interval", "currency", "status", "source", "recurrence_anchor", "user_overrides", "provider_observation"}
 LINK_COLUMNS = {"connection_id", "candidate_id"}
+AUTOMATIC_COLUMNS = {"hidden", "auto_detected"}
 
 
 def supports_pending_review(db):
@@ -53,6 +54,15 @@ def inspect(db):
         pending.append("004_pending_review.sql")
     if "payment_type" not in names:
         pending.append("005_payment_classification.sql")
+    connection_columns = {row["column_name"] for row in db.execute(
+        "select column_name from information_schema.columns where table_schema='keepit_private' and table_name='connections'").fetchall()}
+    automatic_parts = bool(names & AUTOMATIC_COLUMNS or "transactions" in private or "transaction_cursor" in connection_columns)
+    automatic_complete = (AUTOMATIC_COLUMNS <= names and "transactions" in private
+                          and "transaction_cursor" in connection_columns)
+    if automatic_parts and not automatic_complete:
+        raise RuntimeError("Partially applied automatic spending migration; manual inspection required.")
+    if not automatic_complete:
+        pending.append("006_automatic_spending.sql")
     return columns, privileges, pending
 
 

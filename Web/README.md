@@ -1,6 +1,6 @@
 # KeepIt web
 
-React + TypeScript + Vite. Desktop tracking backed by FastAPI and Supabase Auth.
+React + TypeScript + Vite. Connected-account spending and recurring tracking backed by FastAPI and Supabase Auth.
 
 ```sh
 npm ci
@@ -16,6 +16,6 @@ Google Chrome and dummy services on port 5174. These tests never call your real 
 
 Authentication callbacks must be allowlisted in Supabase. See the root README for exact URLs and database setup.
 
-Subscriptions & bills shows classified recurring-payment candidates directly, including uncertain and
-incomplete records. Keep/Dismiss updates local rows using the review response without reloading the page.
-Only kept active records count toward spending; excluded transfers and debt payments are not suggested.
+Spending shows posted connected-account expenses by calendar month, account, and category. Pending charges
+remain visible but do not affect totals. Strong recurring matches appear automatically in separate Subscription
+and Bill sections; uncertain matches stay out of the recurring UI. Imported rows can be hidden and restored.
