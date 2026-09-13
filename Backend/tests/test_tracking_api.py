@@ -53,3 +53,14 @@ class TrackingAPI(DatabaseCase):
         with transaction() as db:
             permissions = db.execute("select has_table_privilege('authenticated','public.subscriptions','UPDATE') as allowed").fetchone()
             self.assertFalse(permissions["allowed"])
+
+    def test_payment_type_is_editable_and_older_clients_preserve_it(self):
+        sub = self.create(name="Electricity", payment_type="bill")
+        self.assertEqual(sub["payment_type"], "bill")
+        payload = {key: sub[key] for key in ("name", "cost", "billing_interval", "currency", "next_renewal_date")}
+        response = self.client.patch(f"/subscriptions/{sub['id']}", json=payload)
+        self.assertEqual(response.json()["payment_type"], "bill")
+        payload["payment_type"] = "subscription"
+        self.assertEqual(self.client.patch(f"/subscriptions/{sub['id']}", json=payload).json()["payment_type"], "subscription")
+        payload["payment_type"] = "transfer"
+        self.assertEqual(self.client.patch(f"/subscriptions/{sub['id']}", json=payload).status_code, 422)

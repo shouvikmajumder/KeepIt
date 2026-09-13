@@ -4,9 +4,26 @@ from app.postgres import transaction, enqueue
 from app.plaid_client import PlaidError
 from app.worker import run_once
 from app.routers.connections import disconnect
+from app.discovery import store_stream
+from test_classification import stream
 
 
 class WorkerTests(DatabaseCase):
+    def test_failed_refresh_rolls_back_partial_reclassification(self):
+        connection = self.queued()
+        connection["accounts"] = [{"id": "card"}]
+        with transaction() as db:
+            store_stream(db, connection, stream())
+            before = db.execute("select observation from keepit_private.candidates where connection_id=%s", (connection["id"],)).fetchone()
+        def failing_sync(db, _):
+            store_stream(db, connection, stream(is_active=False))
+            raise RuntimeError("simulated failure after one stream")
+        with patch("app.worker.sync", side_effect=failing_sync):
+            self.assertTrue(run_once())
+        with transaction() as db:
+            self.assertEqual(before, db.execute("select observation from keepit_private.candidates where connection_id=%s", (connection["id"],)).fetchone())
+            self.assertEqual(db.execute("select count(*) as n from public.subscriptions where connection_id=%s", (connection["id"],)).fetchone()["n"], 1)
+
     def queued(self):
         connection = self.connection()
         with transaction() as db:

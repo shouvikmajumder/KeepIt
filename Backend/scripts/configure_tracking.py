@@ -49,8 +49,10 @@ def inspect(db):
         pending.append("002_connections.sql")
     if any(row["grantee"] in ("anon", "authenticated") for row in privileges):
         pending.append("003_api_access.sql")
-    if TRACKING_COLUMNS <= names and not supports_pending_review(db):
+    if not TRACKING_COLUMNS <= names or not supports_pending_review(db):
         pending.append("004_pending_review.sql")
+    if "payment_type" not in names:
+        pending.append("005_payment_classification.sql")
     return columns, privileges, pending
 
 

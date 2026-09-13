@@ -23,7 +23,7 @@ from ..recurrence import project
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 
 # The columns the app reads back — kept in one place to match SubscriptionOut.
-_COLUMNS = "id,name,cost,next_renewal_date,created_at,billing_interval,currency,status,source,recurrence_anchor"
+_COLUMNS = "id,name,cost,next_renewal_date,created_at,billing_interval,currency,status,source,recurrence_anchor,payment_type"
 
 
 @router.get("", response_model=list[SubscriptionOut])
@@ -44,10 +44,10 @@ def create_subscription(
     with transaction() as db:
         # Owner comes from the verified session, never the request body.
         return db.execute(f"""insert into public.subscriptions
-            (user_id,name,cost,billing_interval,currency,recurrence_anchor,next_renewal_date)
-            values (%s,%s,%s,%s,%s,%s,%s) returning {_COLUMNS}""",
+            (user_id,name,cost,billing_interval,currency,recurrence_anchor,next_renewal_date,payment_type)
+            values (%s,%s,%s,%s,%s,%s,%s,%s) returning {_COLUMNS}""",
             (user_id, body.name, body.cost, body.billing_interval, body.currency,
-             body.next_renewal_date, body.next_renewal_date)).fetchone()
+             body.next_renewal_date, body.next_renewal_date, body.payment_type)).fetchone()
 
 
 
@@ -79,6 +79,8 @@ def update_subscription(sub_id: UUID, body: SubscriptionUpdate,
         if not previous:
             raise HTTPException(404, "Subscription not found")
         payload = body.model_dump(mode="json")
+        if payload["payment_type"] is None:
+            payload.pop("payment_type")
         # Locking prevents a provider refresh from overwriting edits mid-save.
         current = project(previous, today or date.today())
         if (payload["next_renewal_date"] != str(current["next_renewal_date"])

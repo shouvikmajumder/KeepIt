@@ -2,6 +2,7 @@ import { apiFetch } from "./api";
 import { localDate } from "./dates";
 
 export type Subscription = {
+  payment_type: "subscription" | "bill" | "unknown";
   id: string;
   name: string;
   cost: string;
@@ -15,7 +16,12 @@ export type Subscription = {
 };
 export type SubscriptionInput = Pick<
   Subscription,
-  "name" | "cost" | "billing_interval" | "currency" | "next_renewal_date"
+  | "name"
+  | "cost"
+  | "billing_interval"
+  | "currency"
+  | "next_renewal_date"
+  | "payment_type"
 >;
 export type SubscriptionUpdate = SubscriptionInput &
   Pick<Subscription, "status">;

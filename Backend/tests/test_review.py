@@ -77,6 +77,14 @@ class ReviewTests(DatabaseCase):
             store_stream(db, connection, stream)
             self.assertEqual(db.execute("select decision from keepit_private.candidates where id=%s", (candidate,)).fetchone()["decision"], "ignored")
         result = review(candidate, Review(action="confirm"), self.owner)
+        self.assertEqual(result["decision"], "ignored")
+        # A separate, undecided stream exercises explicit edits; dismissed streams stay dismissed.
+        stream["stream_id"] = "second-stream"
+        with transaction() as db:
+            store_stream(db, connection, stream)
+            candidate = db.execute("select id from keepit_private.candidates where connection_id=%s and stream_id=%s",
+                                   (connection["id"], stream["stream_id"])).fetchone()["id"]
+        result = review(candidate, Review(action="confirm"), self.owner)
         update_subscription(result["subscription_id"], SubscriptionUpdate(name="My Netflix", cost="19.00",
             next_renewal_date="2026-10-01"), self.owner)
         stream["last_amount"]["amount"] = 25

@@ -15,3 +15,7 @@ Only public values belong in VITE_* variables. Service-role and database credent
 Google Chrome and dummy services on port 5174. These tests never call your real Supabase project.
 
 Authentication callbacks must be allowlisted in Supabase. See the root README for exact URLs and database setup.
+
+Subscriptions & bills shows classified recurring-payment candidates directly, including uncertain and
+incomplete records. Keep/Dismiss updates local rows using the review response without reloading the page.
+Only kept active records count toward spending; excluded transfers and debt payments are not suggested.

@@ -1,8 +1,10 @@
 """Run separately with python -m app.worker; jobs survive process restarts."""
 import logging
 import time
+from collections import Counter
 from psycopg.types.json import Jsonb
 from .discovery import store_stream
+from .classification import CLASSIFIER_VERSION
 from .plaid_client import PlaidError, plaid, decrypt, require_plaid
 from .postgres import transaction
 
@@ -22,11 +24,16 @@ def sync(db, connection):
         institution_name=%s where id=%s""",
         (Jsonb([{"id": a["id"], "label": a["label"]} for a in accounts]), institution_id, name, connection["id"]))
     connection["accounts"] = accounts
-    result = plaid("/transactions/recurring/get", access_token=token)
+    result = plaid("/transactions/recurring/get", access_token=token,
+                   options={"personal_finance_category_version": "v2"})
+    counts = Counter()
     for stream in result["outflow_streams"]:
-        store_stream(db, connection, stream)
+        data = store_stream(db, connection, stream)
+        if data:
+            counts[(data["payment_type"], data["confidence"])] += 1
     db.execute("""update keepit_private.connections set sync_status='ready',
         last_synced_at=now(),error_code=null where id=%s""", (connection["id"],))
+    logging.info("Recurring classification v%s counts=%s", CLASSIFIER_VERSION, dict(counts))
 
 
 def run_once():
@@ -60,6 +67,7 @@ def run_once():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     require_plaid()
     while True:
         try:

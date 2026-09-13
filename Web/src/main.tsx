@@ -56,7 +56,7 @@ function Shell() {
             <span aria-hidden="true">◫</span>Overview
           </NavLink>
           <NavLink to="/subscriptions">
-            <span aria-hidden="true">≡</span>Subscriptions
+            <span aria-hidden="true">≡</span>Subscriptions & bills
           </NavLink>
           <NavLink to="/connections">
             <span aria-hidden="true">▣</span>Connections

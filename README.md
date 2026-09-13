@@ -1,6 +1,6 @@
 # KeepIt
 
-A desktop web app for tracking subscriptions, monthly-equivalent spending, and estimated renewals.
+A desktop web app for tracking subscriptions and bills, monthly-equivalent spending, and estimated payments.
 React + TypeScript + Vite power the frontend; FastAPI and Supabase PostgreSQL power the API.
 Supabase handles email/password authentication. Tracking data is accessible through the API only.
 
@@ -41,7 +41,7 @@ Redirect configuration is a Supabase dashboard setting; a service-role key canno
 
 ## Database
 
-SQL lives in `Backend/supabase/`. On a **new** database, run `schema.sql` before migrations 001–004.
+SQL lives in `Backend/supabase/`. On a **new** database, run `schema.sql` before migrations 001–005.
 On the existing database, do not rerun the baseline or previously applied migrations.
 
 The inspection helper recognizes the existing baseline and complete migration states. Run it with `--apply`
@@ -57,16 +57,44 @@ The database password is different from the public key and service-role key.
 ## Current scope
 
 - Signup, login, email confirmation, password recovery, persistent browser sessions, and sign-out.
-- Add, edit, deactivate, and remove monthly/annual USD subscriptions.
+- Add, edit, deactivate, and remove monthly/annual USD subscriptions and bills.
 - Monthly-equivalent spending and upcoming renewal estimates.
 - Browser Plaid Link for US credit and depository accounts in local Sandbox development.
-- Automatic provisional Plaid discoveries appear in Subscriptions; users keep or dismiss them before they affect spending totals.
+- Classified Plaid discoveries appear in Subscriptions & bills with strong/uncertain evidence labels; users keep or dismiss them before they affect spending totals.
 - Account deletion, including revocation of any previously connected bank access.
 - Dark desktop UI with keyboard-accessible forms and confirmation dialogs.
 
 Manual tracking does not require Plaid keys, a webhook, or the worker. Local discovery does not receive remote
 webhooks; that is enabled later with the public API deployment. Tracking does not charge or cancel subscriptions
 with providers.
+
+### Recurring-payment classification
+
+The worker requests PFCv2 categories and classifies recurring outflows using versioned, deterministic rules.
+Specific subscription-service names and reliable bill categories establish type; mature monthly streams need
+three distinct recorded payments (annual streams need two) for strong evidence. Category confidence alone
+does not establish a subscription. Transfers, debt repayments, fees, and reliable ordinary-purchase categories
+are excluded. Variable amounts do not disqualify bills. Ambiguous services remain visible as uncertain.
+
+Only monthly/annual USD payments can be kept. Unsupported frequencies keep their actual labels; unknown
+types and missing payment dates can be supplied inline. Keep/Dismiss updates individual rows without reloads.
+Payment type is editable and preserved across future bank refreshes, as are existing user decisions.
+
+To upgrade an existing installation, stop the API/worker, then from `Backend` run:
+
+```sh
+.venv/bin/python scripts/configure_tracking.py
+.venv/bin/python scripts/configure_tracking.py --apply
+```
+
+Migration 005 adds `payment_type` (existing records start unclassified) and queues existing connections for
+fresh evidence. Restart the API and worker with the new code. No relinking is necessary. Reconciliation may
+remove newly excluded **unconfirmed provisional** rows; candidate records remain, and kept payments are never
+deleted or deactivated by classification. A failed refresh rolls back all stream changes from that attempt.
+
+For rollback, stop the worker and restore the prior application code; leave the additive column in place.
+Do not restore an old tracking snapshot over later user decisions. Original candidate records remain available
+for a subsequent refresh. Rule-level logs contain aggregate counts and a version, not bank payloads.
 
 ## Validation
 
@@ -76,6 +104,11 @@ server on port 5174, dummy credentials, and mocked APIs; they do not reach the r
 From `Backend`, run `.venv/bin/python -m unittest discover -s tests -v`.
 Database integration tests only run when `KEEPIT_TEST_DATABASE_URL` points to a disposable PostgreSQL
 database named keepit_test*. They reset its schemas. Never use the existing app database for them.
+
+`Backend/tests/test_classification.py` contains a labeled acceptance corpus and migration/reclassification
+checks. Its false-positive/missed-positive assertions describe fixture coverage, not real-world accuracy.
+Sandbox verifies integration only; evaluate representative, consented and sanitized cases before claiming
+production classification accuracy. Unknown merchants/categories intentionally remain uncertain.
 
 For an intentional live smoke check, run `.venv/bin/python scripts/smoke_tracking.py --run --browser`
 from `Backend` while the local app/API are running. This creates two temporary confirmed test users,

@@ -220,6 +220,30 @@ tbody tr:hover {
 .discovered-subscriptions {
   margin-bottom: 1.5rem;
 }
+.discovered-subscriptions .source-label,
+.payment-type {
+  padding-left: 0;
+  text-transform: capitalize;
+}
+.discovery-evidence {
+  max-width: 28rem;
+  min-width: 15rem;
+  white-space: normal;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  margin: 0.5rem 0;
+}
+.discovered-subscriptions td {
+  vertical-align: top;
+}
+.discovered-subscriptions td label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  margin-bottom: 0.6rem;
+  min-width: 10rem;
+}
 .discovery-footnote {
   padding: 1rem 1.5rem;
   color: var(--muted);

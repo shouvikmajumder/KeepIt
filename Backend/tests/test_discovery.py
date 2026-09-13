@@ -51,11 +51,13 @@ class CurrencyTests(unittest.TestCase):
         }
         observations = []
         with (patch("app.worker.decrypt", return_value="token"),
-              patch("app.worker.plaid", side_effect=lambda path, **_: responses[path]),
+              patch("app.worker.plaid", side_effect=lambda path, **_: responses[path]) as provider,
               patch("app.worker.store_stream", side_effect=lambda db, conn, stream:
                     observations.append(observation(stream, conn["accounts"])))):
             sync(db, connection)
         self.assertTrue(observations[0]["eligible"])
+        provider.assert_any_call("/transactions/recurring/get", access_token="token",
+                                 options={"personal_finance_category_version": "v2"})
         self.assertEqual(observations[0]["currency"], "USD")
         saved_accounts = db.execute.call_args_list[0].args[1][0].obj
         self.assertEqual(saved_accounts, [{"id": "card", "label": "Card ••1234"}])

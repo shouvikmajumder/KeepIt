@@ -154,7 +154,7 @@ export function Connections() {
           {busy ? "Opening Plaid…" : "Connect bank or card"}
         </button>
       </PageHeading>
-      <p className="page-intro">Connect through Plaid to find recurring charges. Keep or dismiss discovered payments on your Subscriptions page.</p>
+      <p className="page-intro">Connect through Plaid to find recurring charges. Keep or dismiss discovered payments on your Subscriptions & bills page.</p>
       <Notice error={error || loadError} retry={error || loadError ? reload : undefined} />
       {linkToken && (
         <PlaidLauncher

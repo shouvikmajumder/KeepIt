@@ -22,6 +22,7 @@ class SubscriptionCreate(BaseModel):
     next_renewal_date: date
     billing_interval: Literal["monthly", "annual"] = "monthly"
     currency: Literal["USD"] = "USD"
+    payment_type: Literal["subscription", "bill", "unknown"] = "subscription"
 
     @field_validator("next_renewal_date")
     @classmethod
@@ -44,8 +45,11 @@ class SubscriptionOut(BaseModel):
     status: Literal["active", "inactive", "pending_review"]
     source: Literal["manual", "plaid"]
     recurrence_anchor: date
+    payment_type: Literal["subscription", "bill", "unknown"]
 
 
 class SubscriptionUpdate(SubscriptionCreate):
+    # Older clients must not silently relabel an existing bill on unrelated edits.
+    payment_type: Literal["subscription", "bill", "unknown"] | None = None
     # Send a complete editable form; ownership and provider fields stay server-side.
     status: Literal["active", "inactive", "pending_review"] = "active"
