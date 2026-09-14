@@ -16,6 +16,8 @@ Google Chrome and dummy services on port 5174. These tests never call your real 
 
 Authentication callbacks must be allowlisted in Supabase. See the root README for exact URLs and database setup.
 
-Spending shows posted connected-account expenses by calendar month, account, and category. Pending charges
-remain visible but do not affect totals. Strong recurring matches appear automatically in separate Subscription
-and Bill sections; uncertain matches stay out of the recurring UI. Imported rows can be hidden and restored.
+Subscriptions is the authenticated homepage. Strong monthly and annual patterns appear automatically with
+payment-history evidence, account labels, and their own monthly estimate. Bills and older untyped saved payments
+are separate sections. Background polling updates detected results without manual confirmation or refresh.
+Spending remains a secondary page with calendar-month expense, account, and category filters. Pending charges
+remain visible but do not affect totals. Imported rows can be hidden and restored.
