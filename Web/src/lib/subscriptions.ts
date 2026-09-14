@@ -15,6 +15,12 @@ export type Subscription = {
   created_at: string;
   hidden: boolean;
   account_label: string | null;
+  detection?: {
+    source: "plaid" | "history";
+    confidence: "strong";
+    payment_count: number;
+    reason_codes: string[];
+  } | null;
 };
 export type SubscriptionInput = Pick<
   Subscription,
@@ -43,3 +49,11 @@ export const deleteSubscription = (id: string) =>
   apiFetch<void>(`/subscriptions/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
+export const setSubscriptionHidden = (id: string, hidden: boolean) =>
+  apiFetch<Subscription>(
+    `/subscriptions/${encodeURIComponent(id)}/visibility`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ hidden }),
+    },
+  );

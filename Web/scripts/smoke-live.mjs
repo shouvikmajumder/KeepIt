@@ -11,8 +11,7 @@ try {
     .getByLabel("Password", { exact: true })
     .fill(process.env.KEEPIT_SMOKE_PASSWORD);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page).toHaveURL(/\/overview$/, { timeout: 20000 });
-  await page.getByRole("link", { name: "Recurring", exact: true }).click();
+  await expect(page).toHaveURL(/\/subscriptions$/, { timeout: 20000 });
   await page
     .getByRole("link", { name: "Add payment", exact: true })
     .first()
@@ -28,6 +27,7 @@ try {
   await page.getByRole("button", { name: "Save payment" }).click();
   await page.getByRole("link", { name: "Spending", exact: true }).click();
   await expect(page.getByText("$20.00", { exact: true }).first()).toBeVisible();
+  await page.getByRole("link", { name: "Subscriptions", exact: true }).click();
   await page.getByRole("link", { name: /Browser smoke subscription/ }).click();
   await page
     .getByRole("button", { name: "Remove payment", exact: true })

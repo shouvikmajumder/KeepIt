@@ -95,7 +95,7 @@ async function setup(page: Page, signedIn = true) {
         const row = subscription({ ...input, id: `sub-${state.creates}`, source: "manual" });
         state.rows.push(row); return route.fulfill({ status: 201, json: row });
       }
-      const id = url.pathname.split("/").pop();
+      const id = url.pathname.split("/")[2];
       if (request.method() === "PATCH") {
         const row = state.rows.find((item) => item.id === id)!;
         Object.assign(row, request.postDataJSON()); return route.fulfill({ json: row });
@@ -118,13 +118,14 @@ async function add(page: Page, name = "Netflix", type = "subscription") {
   await expect(page).toHaveURL(/\/subscriptions$/);
 }
 
-test("signed-out routes redirect and login opens spending", async ({ page }) => {
+test("signed-out routes redirect and login opens subscriptions", async ({ page }) => {
   await setup(page, false); await page.goto("/overview");
   await expect(page).toHaveURL(/\/login$/);
   await page.getByLabel("Email address").fill("test@example.invalid");
   await page.getByLabel("Password", { exact: true }).fill("test-password");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Spending", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/subscriptions$/);
+  await expect(page.getByRole("heading", { name: "Subscriptions", exact: true })).toBeVisible();
 });
 
 test("connected expenses appear automatically and totals exclude pending charges", async ({ page }) => {
@@ -148,10 +149,13 @@ test("connected expenses appear automatically and totals exclude pending charges
 
 test("subscriptions and bills are separated automatically and can be hidden", async ({ page }) => {
   const state = await setup(page);
-  state.rows.push(subscription(), subscription({ id: "bill", name: "Electricity", cost: "90.00", payment_type: "bill" }));
+  state.rows.push(subscription({ detection: { source: "history", confidence: "strong", payment_count: 24, reason_codes: ["regular_cadence", "stable_price"] } }), subscription({ id: "bill", name: "Electricity", cost: "90.00", payment_type: "bill", detection: null }));
   await page.goto("/subscriptions");
   await expect(page.getByRole("heading", { name: /Subscriptions 1/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: /Bills 1/ })).toBeVisible();
+  await expect(page.getByText("Monthly pattern · 24 payments")).toBeVisible();
+  await expect(page.getByText("$15.00 / month · est.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("navigation").getByRole("link").first()).toHaveText("≡Subscriptions");
   const netflix = page.getByRole("row").filter({ hasText: "Netflix" });
   await netflix.getByRole("button", { name: "Hide" }).click();
   await expect(page.getByRole("row").filter({ hasText: "Netflix" })).toHaveCount(0);
@@ -168,6 +172,19 @@ test("manual entry remains available as a fallback", async ({ page }) => {
   await page.getByLabel("Payment name").fill("Apartment rent");
   await page.getByRole("button", { name: "Save payment" }).click();
   expect(state.rows[0].name).toBe("Apartment rent");
+});
+
+test("newly detected subscriptions appear without a manual refresh", async ({ page }) => {
+  await page.clock.install();
+  const state = await setup(page);
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/subscriptions$/);
+  await expect(page.getByText("No subscriptions found.")).toBeVisible();
+  state.rows.push(subscription({ detection: { source: "history", confidence: "strong", payment_count: 3, reason_codes: ["regular_cadence", "stable_price"] } }));
+  await page.clock.fastForward(10000);
+  await expect(page.getByRole("row").filter({ hasText: "Netflix" })).toBeVisible();
+  await page.getByRole("link", { name: "Spending", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Spending", exact: true })).toBeVisible();
 });
 
 test("connections describe automatic organization", async ({ page }) => {

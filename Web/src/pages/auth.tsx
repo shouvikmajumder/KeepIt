@@ -81,7 +81,7 @@ export function AuthPage({
           password,
         });
         if (error) throw error;
-        navigate("/overview", { replace: true });
+        navigate("/subscriptions", { replace: true });
       } else if (mode === "signup") {
         if (!name.trim()) throw new Error("Enter your name.");
         const { data, error } = await supabase.auth.signUp({
@@ -93,7 +93,7 @@ export function AuthPage({
           },
         });
         if (error) throw error;
-        if (data.session) navigate("/overview", { replace: true });
+        if (data.session) navigate("/subscriptions", { replace: true });
         else
           setMessage(
             "Check your email for a confirmation link. Open it in this browser. If you already have an account, sign in instead.",
@@ -110,7 +110,7 @@ export function AuthPage({
       } else {
         const { error } = await supabase.auth.updateUser({ password });
         if (error) throw error;
-        navigate("/overview", { replace: true });
+        navigate("/subscriptions", { replace: true });
       }
     } catch (error) {
       setError(errorMessage(error));
@@ -121,7 +121,7 @@ export function AuthPage({
   }
   if (loading) return <Loading />;
   if (session && (mode === "login" || mode === "signup"))
-    return <Navigate to="/overview" replace />;
+    return <Navigate to="/subscriptions" replace />;
   return (
     <AuthFrame title={title}>
       <p className="muted">
@@ -241,7 +241,7 @@ export function AuthCallback() {
       if (!alive) return;
       if (error) setError(error);
       else
-        navigate(recovery ? "/reset-password" : "/overview", { replace: true });
+        navigate(recovery ? "/reset-password" : "/subscriptions", { replace: true });
     });
     return () => {
       alive = false;

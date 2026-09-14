@@ -52,11 +52,11 @@ function Shell() {
         <Brand />
         <p className="nav-label">Workspace</p>
         <nav aria-label="Main navigation">
+          <NavLink to="/subscriptions">
+            <span aria-hidden="true">≡</span>Subscriptions
+          </NavLink>
           <NavLink to="/overview">
             <span aria-hidden="true">◫</span>Spending
-          </NavLink>
-          <NavLink to="/subscriptions">
-            <span aria-hidden="true">≡</span>Recurring
           </NavLink>
           <NavLink to="/connections">
             <span aria-hidden="true">▣</span>Connections
@@ -124,7 +124,7 @@ function App() {
             <Route path="/settings" element={<Settings />} />
           </Route>
         </Route>
-        <Route path="*" element={<Navigate to="/overview" replace />} />
+        <Route path="*" element={<Navigate to="/subscriptions" replace />} />
       </Routes>
     </SessionProvider>
   );
