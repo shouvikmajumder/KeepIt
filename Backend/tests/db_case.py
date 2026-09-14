@@ -55,5 +55,6 @@ class DatabaseCase(unittest.TestCase):
                 "next_renewal_date": "2026-10-01", "eligible": True, "reason": None,
                 "payment_type": "subscription", "confidence": "possible", **changes}
         with transaction() as db:
-            return db.execute("""insert into keepit_private.candidates(connection_id,stream_id,observation)
-                values (%s,%s,%s) returning id""", (connection["id"], str(uuid4()), Jsonb(data))).fetchone()["id"]
+            key = str(uuid4())
+            return db.execute("""insert into keepit_private.candidates(connection_id,stream_id,detection_key,observation)
+                values (%s,%s,%s,%s) returning id""", (connection["id"], key, key, Jsonb(data))).fetchone()["id"]

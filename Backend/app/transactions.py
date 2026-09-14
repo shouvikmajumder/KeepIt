@@ -1,6 +1,7 @@
 """Normalize Plaid transaction updates without retaining raw bank descriptions."""
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
+from .detection import identity
 
 
 def _date(value):
@@ -20,6 +21,9 @@ def _amount(value):
 
 
 def _name(transaction):
+    service, ambiguous = identity(transaction.get("merchant_name"), transaction.get("name"))
+    if not ambiguous and " service " in service:
+        return str(transaction.get("name"))[:160]
     candidates = [transaction.get("merchant_name")]
     candidates.extend(item.get("name") for item in transaction.get("counterparties") or []
                       if item.get("type") == "merchant")

@@ -1,4 +1,6 @@
 import unittest
+from datetime import date
+from app.detection import shift
 from pathlib import Path
 from db_case import DatabaseCase
 from app.classification import CLASSIFIER_VERSION
@@ -10,10 +12,16 @@ from app.schemas import SubscriptionUpdate
 
 
 def stream(**changes):
-    return {"stream_id": "sample", "account_id": "card", "merchant_name": "Netflix", "description": "",
+    value = {"stream_id": "sample", "account_id": "card", "merchant_name": "Netflix", "description": "",
             "is_active": True, "status": "MATURE", "frequency": "MONTHLY",
             "transaction_ids": ["one", "two", "three"], "last_amount": {"amount": 15, "iso_currency_code": "USD"},
             "average_amount": {"amount": 14}, "predicted_next_date": "2027-01-31", **changes}
+    ids = value.get("transaction_ids") or []
+    step = 12 if value.get("frequency") == "ANNUALLY" else 1
+    value.setdefault("_history", [{"transaction_id": tid, "account_id": "card",
+        "transaction_date": shift(date.today().replace(day=1), -step * (len(ids) - i - 1)),
+        "amount": "15.00", "currency": "USD", "pending": False} for i, tid in enumerate(ids)])
+    return value
 
 
 def category(primary, detailed, confidence="HIGH"):
@@ -39,15 +47,15 @@ CASES = [
     ("specific marketplace service", {"merchant_name": "Amazon", "description": "AMAZON PRIME MEMBERSHIP 1234"}, "subscription", "strong"),
     ("generic processor", {"merchant_name": "PayPal"}, "unknown", "possible"),
     ("generic apple", {"merchant_name": "Apple"}, "unknown", "possible"),
-    ("merchant substring", {"merchant_name": "NotNetflix"}, "unknown", "possible"),
+    ("unknown service with real history", {"merchant_name": "NotNetflix"}, "subscription", "strong"),
     ("early detection", {"status": "EARLY_DETECTION", "transaction_ids": ["one"]}, "subscription", "possible"),
-    ("missing status", {"status": None}, "subscription", "possible"),
+    ("missing status with local evidence", {"status": None}, "subscription", "strong"),
     ("duplicate history", {"transaction_ids": ["one", "one", "two"]}, "subscription", "possible"),
     ("missing history", {"transaction_ids": None}, "subscription", "possible"),
     ("weak bill category", {"merchant_name": "Power", "personal_finance_category": category("RENT_AND_UTILITIES", "RENT_AND_UTILITIES_WATER", "LOW")}, "bill", "possible"),
     ("category establishes membership", {"merchant_name": "Local gym", "personal_finance_category": category("PERSONAL_CARE", "PERSONAL_CARE_GYMS_AND_FITNESS_CENTERS")}, "subscription", "strong"),
     ("conflict", {"personal_finance_category": category("RENT_AND_UTILITIES", "RENT_AND_UTILITIES_RENT")}, "unknown", "possible"),
-    ("unknown category", {"merchant_name": "Unknown", "personal_finance_category": category("NEW", "NEW_CATEGORY")}, "unknown", "possible"),
+    ("unknown category", {"merchant_name": "Unknown", "personal_finance_category": category("NEW", "NEW_CATEGORY")}, "subscription", "strong"),
     ("inactive", {"is_active": False}, "unknown", "excluded"),
     ("tombstoned", {"status": "TOMBSTONED"}, "unknown", "excluded"),
 ]
@@ -77,10 +85,10 @@ class ClassificationTests(unittest.TestCase):
                 self.assertFalse(data["eligible"])
                 self.assertIn("monthly and annual", data["reason"])
 
-    def test_missing_or_invalid_dates_are_not_valid_automatic_renewal_dates(self):
+    def test_missing_or_invalid_provider_dates_use_actual_history(self):
         for value in (None, "not-a-date", "1800-01-01", "2027-02-30"):
             data = observation(stream(predicted_next_date=value), [{"id": "card"}])
-            self.assertIsNone(data["next_renewal_date"])
+            self.assertIsNotNone(data["next_renewal_date"])
             self.assertTrue(data["eligible"])
 
     def test_no_raw_history_or_descriptions_persisted(self):
@@ -91,7 +99,7 @@ class ClassificationTests(unittest.TestCase):
 
     def test_invalid_money_and_foreign_average(self):
         for amount in (0, -1, "NaN", "Infinity", "0.001", "99999999.999", None):
-            data = observation(stream(last_amount={"amount": amount, "iso_currency_code": "USD"}), [{"id": "card"}])
+            data = observation(stream(last_amount={"amount": amount, "iso_currency_code": "USD"}, _history=[]), [{"id": "card"}])
             self.assertFalse(data["eligible"])
         data = observation(stream(average_amount={"amount": 12, "iso_currency_code": "EUR"}), [{"id": "card"}])
         self.assertIsNone(data["average_amount"])
@@ -140,14 +148,14 @@ class ClassificationDatabaseTests(DatabaseCase):
 
     def test_uncertain_candidate_stays_hidden_until_it_becomes_strong(self):
         connection = self.prepared()
-        pending = self.save(connection, stream(merchant_name="Unknown", predicted_next_date=None))
+        pending = self.save(connection, stream(merchant_name="Unknown", predicted_next_date=None, _history=[]))
         self.assertIsNone(pending["subscription_id"])
         self.assertEqual(dashboard(user_id=self.owner)["subscription_monthly_estimate"], "0.00")
         promoted = self.save(connection, stream(stream_id="sample"))
         self.assertIsNotNone(promoted["subscription_id"])
         self.assertEqual(promoted["decision"], "confirmed")
 
-    def test_missing_date_on_refresh_deactivates_automatic_row(self):
+    def test_missing_provider_date_keeps_history_based_prediction(self):
         connection = self.prepared()
         before = self.save(connection, stream())
         after = self.save(connection, stream(predicted_next_date=None))
@@ -155,7 +163,7 @@ class ClassificationDatabaseTests(DatabaseCase):
         self.assertEqual(before["subscription_id"], after["subscription_id"])
         with transaction() as db:
             self.assertEqual(db.execute("select status from public.subscriptions where id=%s",
-                (after["subscription_id"],)).fetchone()["status"], "inactive")
+                (after["subscription_id"],)).fetchone()["status"], "active")
 
     def test_migration_preserves_records_and_decisions_and_queues_connections(self):
         from scripts.configure_tracking import inspect

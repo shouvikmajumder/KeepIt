@@ -29,6 +29,7 @@ def positive_amount(value):
 
 def observation(stream: dict, accounts: list[dict]) -> dict:
     classification = classify(stream)
+    facts = classification["history_evidence"]
     amount = stream.get("last_amount") or {}
     interval = {"MONTHLY": "monthly", "ANNUALLY": "annual"}.get(stream.get("frequency"))
     account = next((a for a in accounts if a["id"] == stream.get("account_id")), {})
@@ -39,7 +40,7 @@ def observation(stream: dict, accounts: list[dict]) -> dict:
     if currency is None and unofficial_currency is None:
         currency = account.get("iso_currency_code")
         unofficial_currency = account.get("unofficial_currency_code")
-    cost = positive_amount(amount.get("amount"))
+    cost = positive_amount(facts["estimated_amount"] or amount.get("amount"))
     valid_cost = cost is not None
     reason = None
     if not account:
@@ -65,9 +66,9 @@ def observation(stream: dict, accounts: list[dict]) -> dict:
     return {"name": (stream.get("merchant_name") or stream.get("description") or "Recurring payment")[:120],
             "cost": cost or "0.00",
             "billing_interval": interval, "currency": currency,
-            "next_renewal_date": supported_date(stream.get("predicted_next_date")),
-            "last_payment_date": supported_date(stream.get("last_date")), "account_label": account.get("label", "Account"),
-            "first_payment_date": supported_date(stream.get("first_date")), "provider_frequency": stream.get("frequency", "UNKNOWN"),
+            "next_renewal_date": supported_date(stream.get("predicted_next_date")) or facts["predicted_next_date"],
+            "last_payment_date": facts["last_payment_date"] or supported_date(stream.get("last_date")), "account_label": account.get("label", "Account"),
+            "first_payment_date": facts["first_payment_date"] or supported_date(stream.get("first_date")), "provider_frequency": stream.get("frequency", "UNKNOWN"),
             "stream_status": stream.get("status", "UNKNOWN"),
             "average_amount": average_cost,
             "category": {key: category.get(key) for key in ("primary", "detailed", "version", "confidence_level")},
@@ -77,11 +78,22 @@ def observation(stream: dict, accounts: list[dict]) -> dict:
 
 def store_stream(db, connection: dict, stream: dict):
     data = observation(stream, connection["accounts"])
-    candidate = db.execute("""insert into keepit_private.candidates(connection_id,stream_id,observation)
-        values (%s,%s,%s) on conflict(connection_id,stream_id) do update
-        set observation=excluded.observation returning id,decision,subscription_id""",
-        (connection["id"], stream["stream_id"], Jsonb(data))).fetchone()
-    auto_track = (data["eligible"] and data["confidence"] == "strong"
+    candidate = db.execute("""insert into keepit_private.candidates
+        (connection_id,stream_id,observation,source,detection_key,account_id,last_seen_at)
+        values (%s,%s,%s,%s,%s,%s,now()) on conflict(connection_id,stream_id) do update
+        set observation=excluded.observation,source=excluded.source,
+            detection_key=excluded.detection_key,account_id=excluded.account_id,last_seen_at=now()
+        returning id,decision,subscription_id""",
+        (connection["id"], stream["stream_id"], Jsonb(data), stream.get("_source", "plaid"),
+         stream["stream_id"], stream.get("account_id"))).fetchone()
+    # Membership stores references to normalized transactions, not bank payloads.
+    # Keep earlier memberships so provider outages and rolling retention do not
+    # recreate a hidden or previously detected payment under a different source.
+    for row in stream.get("_history", []):
+        if row.get("id"):
+            db.execute("""insert into keepit_private.candidate_transactions(candidate_id,transaction_id)
+                values (%s,%s) on conflict do nothing""", (candidate["id"], row["id"]))
+    auto_track = (candidate["decision"] != "ignored" and data["eligible"] and data["confidence"] == "strong"
                   and data["payment_type"] in ("subscription", "bill")
                   and data["next_renewal_date"] is not None)
     recurring_cost = (data.get("average_amount") if data["payment_type"] == "bill" else None) or data["cost"]
@@ -126,8 +138,14 @@ def store_stream(db, connection: dict, stream: dict):
     # Only records created by automation are withdrawn when evidence weakens.
     # Previously user-confirmed records remain stable.
     if existing.get("auto_detected") and not auto_track:
-        db.execute("update public.subscriptions set status='inactive' where id=%s and user_id=%s",
-                   (existing["id"], connection["user_id"]))
+        codes = set(data["reason_codes"])
+        grace = (not data["history_evidence"]["expired"] and data["eligible"]
+                 and data["payment_type"] == "subscription"
+                 and not codes & {"conflicting_evidence", "ambiguous_merchant", "variable_price"}
+                 and bool(codes & {"limited_history", "pending_price_change"}))
+        if not grace and "status" not in (existing.get("user_overrides") or {}):
+            db.execute("update public.subscriptions set status='inactive' where id=%s and user_id=%s",
+                       (existing["id"], connection["user_id"]))
         return data
     if not data["eligible"]:
         return data

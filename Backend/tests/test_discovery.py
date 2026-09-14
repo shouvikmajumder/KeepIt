@@ -54,8 +54,8 @@ class CurrencyTests(unittest.TestCase):
         observations = []
         with (patch("app.worker.decrypt", return_value="token"),
               patch("app.worker.plaid", side_effect=lambda path, **_: responses[path]) as provider,
-              patch("app.worker.store_stream", side_effect=lambda db, conn, stream:
-                    observations.append(observation(stream, conn["accounts"])))):
+              patch("app.worker.reconcile", side_effect=lambda db, conn, streams:
+                    observations.append(observation(streams[0], conn["accounts"])) or {})):
             sync(db, connection)
         self.assertTrue(observations[0]["eligible"])
         provider.assert_any_call("/transactions/recurring/get", access_token="token",

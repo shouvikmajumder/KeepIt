@@ -1,9 +1,8 @@
 """Run separately with python -m app.worker; jobs survive process restarts."""
 import logging
 import time
-from collections import Counter
 from psycopg.types.json import Jsonb
-from .discovery import store_stream
+from .reconciliation import reconcile
 from .classification import CLASSIFIER_VERSION
 from .plaid_client import PlaidError, plaid, decrypt, require_plaid
 from .postgres import transaction
@@ -55,23 +54,22 @@ def sync(db, connection):
     connection["accounts"] = accounts
     account_map = {account["id"]: account for account in accounts}
     complete = sync_transactions(db, connection, token, account_map)
+    transaction_complete = complete
     result = {"outflow_streams": []}
+    recurring_error = None
     if complete:
         try:
             result = plaid("/transactions/recurring/get", access_token=token,
                            options={"personal_finance_category_version": "v2"})
         except PlaidError as exc:
-            if exc.code != "PRODUCT_NOT_READY":
-                raise
+            recurring_error = exc.code
             complete = False
-    counts = Counter()
-    for stream in result["outflow_streams"]:
-        data = store_stream(db, connection, stream)
-        if data:
-            counts[(data["payment_type"], data["confidence"])] += 1
+    counts = reconcile(db, connection, result["outflow_streams"] if not recurring_error else None)
     db.execute("""update keepit_private.connections set sync_status=%s,
-        last_synced_at=now(),error_code=null where id=%s""",
-        ("ready" if complete else "syncing", connection["id"]))
+        last_synced_at=now(),error_code=%s where id=%s""",
+        ("ready" if transaction_complete else "syncing", recurring_error, connection["id"]))
+    if recurring_error:
+        logging.warning("Recurring provider unavailable; history detection completed: %s", recurring_error)
     logging.info("Recurring classification v%s counts=%s", CLASSIFIER_VERSION, dict(counts))
     return complete
 
@@ -101,9 +99,10 @@ def run_once():
             logging.warning("Discovery will retry: %s", code)
         else:
             # Daily reconciliation also catches a missed webhook.
-            delay = "24 hours" if complete else "30 seconds"
-            db.execute("""update keepit_private.jobs set attempts=0,
-                available_at=now()+(%s)::interval where connection_id=%s""", (delay, connection["id"]))
+            delay = "24 hours" if complete else f"{min(3600, 30 * 2 ** min(connection['attempts'], 7))} seconds"
+            db.execute("""update keepit_private.jobs set attempts=%s,
+                available_at=now()+(%s)::interval where connection_id=%s""",
+                (0 if complete else connection["attempts"] + 1, delay, connection["id"]))
         return True
 
 

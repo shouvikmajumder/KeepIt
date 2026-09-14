@@ -63,6 +63,14 @@ def inspect(db):
         raise RuntimeError("Partially applied automatic spending migration; manual inspection required.")
     if not automatic_complete:
         pending.append("006_automatic_spending.sql")
+    candidate_columns = {row["column_name"] for row in db.execute(
+        "select column_name from information_schema.columns where table_schema='keepit_private' and table_name='candidates'").fetchall()}
+    detection_columns = {"source", "detection_key", "account_id", "last_seen_at"}
+    detection_complete = detection_columns <= candidate_columns and "candidate_transactions" in private
+    if (candidate_columns & detection_columns or "candidate_transactions" in private) and not detection_complete:
+        raise RuntimeError("Partially applied subscription detection migration; manual inspection required.")
+    if not detection_complete:
+        pending.append("007_subscription_detection.sql")
     return columns, privileges, pending
 
 
