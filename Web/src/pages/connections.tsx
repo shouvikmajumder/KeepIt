@@ -2,15 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import { usePlaidLink } from "react-plaid-link";
 import { Link } from "react-router";
 import { Loading, Notice, PageHeading } from "../components/ui";
-import {
-  disconnect,
-  listConnections,
-  refreshConnection,
-  type Connection,
-} from "../lib/banks";
+import { BankSyncStatus } from "../components/connection-status";
+import { disconnect, refreshConnection, type Connection } from "../lib/banks";
 import { errorMessage } from "../lib/api";
 import { createLinkToken, exchangePublicToken } from "../lib/plaid";
-import { useResource } from "../lib/use-resource";
+import { useConnectionStatus } from "../lib/use-connection-status";
 
 function PlaidLauncher({
   token,
@@ -27,7 +23,8 @@ function PlaidLauncher({
     async (publicToken: string | null) => {
       try {
         if (!reconnectingId) {
-          if (!publicToken) throw new Error("Plaid did not return a connection token.");
+          if (!publicToken)
+            throw new Error("Plaid did not return a connection token.");
           await exchangePublicToken(publicToken);
         } else {
           await refreshConnection(reconnectingId);
@@ -42,7 +39,12 @@ function PlaidLauncher({
   const { open, ready } = usePlaidLink({
     token,
     onSuccess,
-    onExit: (error) => onError(error ? "Bank connection did not finish. Please try again." : "Bank connection was cancelled."),
+    onExit: (error) =>
+      onError(
+        error
+          ? "Bank connection did not finish. Please try again."
+          : "Bank connection was cancelled.",
+      ),
   });
   useEffect(() => {
     if (ready) open();
@@ -61,30 +63,32 @@ function ConnectionCard({
   onReconnect: (id: string) => void;
   onDisconnect: (id: string) => void;
 }) {
-  const state = {
-    syncing: "Importing and organizing transactions…",
-    ready: "Spending is up to date",
-    error: "Updates are delayed. Try again shortly.",
-    needs_reconnect: "Reconnect to resume updates.",
-  }[row.sync_status];
   return (
     <article className="connection-card">
-      <div>
+      <div className="connection-details">
         <h2>{row.institution_name}</h2>
         <p className="muted">
           {row.accounts.length
             ? row.accounts.map((account) => account.label).join(" · ")
             : "Account details will appear after the first sync."}
         </p>
-        <p className="connection-state">{state}</p>
+        <BankSyncStatus row={row} />
       </div>
       <div className="connection-actions">
         {row.sync_status === "needs_reconnect" && (
-          <button className="button primary" disabled={busy} onClick={() => onReconnect(row.id)}>
+          <button
+            className="button primary"
+            disabled={busy}
+            onClick={() => onReconnect(row.id)}
+          >
             Reconnect
           </button>
         )}
-        <button className="text-button danger-text" disabled={busy} onClick={() => onDisconnect(row.id)}>
+        <button
+          className="text-button danger-text"
+          disabled={busy}
+          onClick={() => onDisconnect(row.id)}
+        >
           Disconnect
         </button>
       </div>
@@ -93,7 +97,7 @@ function ConnectionCard({
 }
 
 export function Connections() {
-  const { data, error: loadError, loading, reload } = useResource(listConnections);
+  const { data, error: loadError, loading, reload } = useConnectionStatus();
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [reconnectId, setReconnectId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -118,7 +122,12 @@ export function Connections() {
     await reload();
   }
   async function remove(id: string) {
-    if (!window.confirm("Disconnect this account? Imported expenses will be removed. Recurring payments will remain as manual records.")) return;
+    if (
+      !window.confirm(
+        "Disconnect this account? Imported expenses will be removed. Recurring payments will remain as manual records.",
+      )
+    )
+      return;
     setBusy(true);
     setError(null);
     try {
@@ -133,12 +142,22 @@ export function Connections() {
   return (
     <>
       <PageHeading eyebrow="Your connected accounts" title="Bank connections">
-        <button className="button primary" disabled={busy} onClick={() => startLink()}>
+        <button
+          className="button primary"
+          disabled={busy}
+          onClick={() => startLink()}
+        >
           {busy ? "Opening Plaid…" : "Connect bank or card"}
         </button>
       </PageHeading>
-      <p className="page-intro">Connect through Plaid and KeepIt will organize your posted expenses, subscriptions, and bills automatically.</p>
-      <Notice error={error || loadError} retry={error || loadError ? reload : undefined} />
+      <p className="page-intro">
+        Connect through Plaid and KeepIt will detect subscriptions from your
+        payment history and organize your posted expenses automatically.
+      </p>
+      <Notice
+        error={error || loadError}
+        retry={error || loadError ? reload : undefined}
+      />
       {linkToken && (
         <PlaidLauncher
           token={linkToken}
@@ -152,20 +171,30 @@ export function Connections() {
           }}
         />
       )}
-      {loading ? <Loading /> : (
+      {loading ? (
+        <Loading />
+      ) : (
         <section className="panel connections-panel">
           <header className="panel-heading">
             <div>
               <h2>Connected accounts</h2>
               <p className="muted">Plaid access can be removed at any time.</p>
             </div>
-            <Link to="/subscriptions">View recurring payments</Link>
+            <Link to="/subscriptions">View subscriptions</Link>
           </header>
-          {data?.length ? data.map((row) => (
-            <ConnectionCard key={row.id} row={row} busy={busy} onReconnect={startLink} onDisconnect={remove} />
-          )) : (
+          {data?.length ? (
+            data.map((row) => (
+              <ConnectionCard
+                key={row.id}
+                row={row}
+                busy={busy}
+                onReconnect={startLink}
+                onDisconnect={remove}
+              />
+            ))
+          ) : !loadError ? (
             <p className="empty-inline">No accounts connected yet.</p>
-          )}
+          ) : null}
         </section>
       )}
     </>

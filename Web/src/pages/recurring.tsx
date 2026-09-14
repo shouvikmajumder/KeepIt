@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Loading, Notice, PageHeading } from "../components/ui";
+import { SubscriptionSyncBanner } from "../components/connection-status";
+import { useConnectionStatus } from "../lib/use-connection-status";
 import { dateLabel, money } from "../lib/dates";
 import {
   listSubscriptions,
@@ -24,11 +26,13 @@ function RecurringSection({
   rows,
   busy,
   onHide,
+  importing = false,
 }: {
   title: string;
   rows: Subscription[];
   busy: string | null;
   onHide: (item: Subscription) => void;
+  importing?: boolean;
 }) {
   return (
     <section className="panel recurring-section">
@@ -108,7 +112,11 @@ function RecurringSection({
           </table>
         </div>
       ) : (
-        <p className="empty-inline">No {title.toLowerCase()} found.</p>
+        <p className="empty-inline">
+          {importing
+            ? "Your subscriptions will appear here as we find them."
+            : `No ${title.toLowerCase()} found.`}
+        </p>
       )}
     </section>
   );
@@ -120,6 +128,8 @@ export function Subscriptions() {
     [],
   );
   const { data, error, loading, reload, updateData } = useResource(load);
+  const connectionStatus = useConnectionStatus();
+  const { completedVersion } = connectionStatus;
   const [showHidden, setShowHidden] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -140,12 +150,13 @@ export function Subscriptions() {
         pending = false;
       }
     }
+    if (completedVersion > 0) void refresh();
     const timer = window.setInterval(refresh, 10000);
     return () => {
       window.clearInterval(timer);
       controller.abort();
     };
-  }, [updateData, busy]);
+  }, [updateData, busy, completedVersion]);
   async function toggle(item: Subscription) {
     setBusy(item.id);
     setActionError(null);
@@ -191,6 +202,11 @@ export function Subscriptions() {
         automatically. You can hide anything that does not belong.
       </p>
       <Notice error={error || actionError} retry={error ? reload : undefined} />
+      <SubscriptionSyncBanner
+        connections={connectionStatus.data}
+        completed={connectionStatus.completed}
+        error={connectionStatus.error}
+      />
       {loading ? (
         <Loading />
       ) : (
@@ -203,6 +219,7 @@ export function Subscriptions() {
             <>
               <RecurringSection
                 title="Subscriptions"
+                importing={!showHidden && connectionStatus.syncingCount > 0}
                 rows={visible.filter(
                   (item) => item.payment_type === "subscription",
                 )}

@@ -30,7 +30,7 @@ function expense(changes: Partial<Expense> = {}): Expense {
 async function setup(page: Page, signedIn = true) {
   const state = {
     rows: [] as Subscription[], expenses: [] as Expense[], creates: 0, deletes: 0,
-    accountDeletes: 0, failList: false,
+    accountDeletes: 0, failList: false, failConnections: false, subscriptionReads: 0,
     connections: [] as Array<{ id: string; institution_name: string;
       accounts: { id: string; label: string }[]; sync_status: string; last_synced_at: string | null }>,
   };
@@ -49,7 +49,9 @@ async function setup(page: Page, signedIn = true) {
     const url = new URL(request.url());
     expect(request.headers().authorization).toBe("Bearer test-access-token");
     if (url.pathname === "/account") { state.accountDeletes++; return route.fulfill({ status: 204 }); }
-    if (url.pathname === "/connections") return route.fulfill({ json: state.connections });
+    if (url.pathname === "/connections") return state.failConnections
+      ? route.fulfill({ status: 503, json: { detail: "Unavailable" } })
+      : route.fulfill({ json: state.connections });
     if (url.pathname === "/dashboard") {
       const selectedMonth = url.searchParams.get("month") || month;
       const selectedAccount = url.searchParams.get("account_id");
@@ -87,6 +89,7 @@ async function setup(page: Page, signedIn = true) {
     }
     if (url.pathname.startsWith("/subscriptions")) {
       if (request.method() === "GET") {
+        state.subscriptionReads++;
         if (state.failList) return route.fulfill({ status: 503, json: { detail: "Tracking is temporarily unavailable." } });
         return route.fulfill({ json: state.rows });
       }
@@ -195,6 +198,91 @@ test("connections describe automatic organization", async ({ page }) => {
   await expect(page.getByText(/organize your posted expenses/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Check for updates" })).toHaveCount(0);
   await expect(page.getByText("Sandbox Bank")).toBeVisible();
+});
+
+test("bank import shows activity and completes automatically", async ({ page }) => {
+  await page.clock.install();
+  const state = await setup(page);
+  state.connections.push({ id: "bank", institution_name: "Sandbox Bank", accounts: [], sync_status: "syncing", last_synced_at: null });
+  await page.goto("/connections");
+  await expect(page.getByRole("status")).toContainText("Retrieving your bank activity");
+  await expect(page.getByText(/You can leave this page/)).toBeVisible();
+  await expect(page.locator(".sync-indicator .spinner")).toBeVisible();
+  state.connections[0].sync_status = "ready";
+  state.connections[0].last_synced_at = "2026-09-13T12:00:00Z";
+  await page.clock.fastForward(10000);
+  await expect(page.getByRole("status")).toHaveText("Bank activity updated");
+  await expect(page.locator("time")).toHaveAttribute("datetime", "2026-09-13T12:00:00Z");
+  await expect(page.locator(".sync-indicator .spinner")).toHaveCount(0);
+});
+
+test("subscription import refreshes results on completion and dismisses success", async ({ page }) => {
+  await page.clock.install();
+  const state = await setup(page);
+  state.connections.push({ id: "bank", institution_name: "Bank", accounts: [], sync_status: "syncing", last_synced_at: null });
+  await page.goto("/subscriptions");
+  await expect(page.getByText("Your subscriptions will appear here as we find them.")).toBeVisible();
+  await expect(page.getByRole("status")).toContainText("1 bank updating");
+  const reads = state.subscriptionReads;
+  state.connections[0].sync_status = "ready";
+  state.rows.push(subscription());
+  // Visibility refresh checks bank status without waiting for the subscription timer.
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await expect(page.getByRole("row").filter({ hasText: "Netflix" })).toBeVisible();
+  expect(state.subscriptionReads).toBeGreaterThan(reads);
+  await expect(page.getByRole("status")).toHaveText("Bank activity updated. Your subscriptions are up to date.");
+  await page.clock.fastForward(8000);
+  await expect(page.locator(".subscription-sync-banner")).toHaveCount(0);
+});
+
+test("mixed bank states keep existing subscriptions visible and identify attention needed", async ({ page }) => {
+  const state = await setup(page);
+  state.rows.push(subscription());
+  for (const [id, status] of [["One", "syncing"], ["Two", "syncing"], ["Three", "needs_reconnect"], ["Four", "error"]]) {
+    state.connections.push({ id, institution_name: id, accounts: [], sync_status: status, last_synced_at: null });
+  }
+  await page.goto("/subscriptions");
+  await expect(page.getByRole("row").filter({ hasText: "Netflix" })).toBeVisible();
+  await expect(page.getByRole("status")).toContainText("2 banks updating");
+  await expect(page.getByRole("status")).toContainText("2 banks also need attention.");
+  await page.getByRole("link", { name: "View bank connections" }).click();
+  await expect(page.getByText("Your bank needs to reconnect")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reconnect", exact: true })).toBeVisible();
+  await expect(page.getByText("Updates are delayed", { exact: true })).toBeVisible();
+});
+
+test("status failures preserve content and recover without manual refresh", async ({ page }) => {
+  await page.clock.install();
+  const state = await setup(page);
+  state.rows.push(subscription());
+  state.failConnections = true;
+  await page.goto("/subscriptions");
+  await expect(page.getByRole("status")).toContainText("Unable to check update status.");
+  await expect(page.getByRole("row").filter({ hasText: "Netflix" })).toBeVisible();
+  state.failConnections = false;
+  state.connections.push({ id: "bank", institution_name: "Bank", accounts: [], sync_status: "syncing", last_synced_at: null });
+  await page.clock.fastForward(10000);
+  await expect(page.getByRole("status")).toContainText("1 bank updating");
+  await page.getByRole("link", { name: "View bank connections" }).click();
+  await expect(page.getByText("Retrieving your bank activity")).toBeVisible();
+  state.failConnections = true;
+  await page.clock.fastForward(10000);
+  await expect(page.getByRole("alert")).toContainText("Unable to check update status.");
+  await expect(page.getByRole("heading", { name: "Bank", exact: true })).toBeVisible();
+});
+
+test("sync indicators fit mobile and respect reduced motion", async ({ page }, testInfo) => {
+  const state = await setup(page);
+  state.connections.push({ id: "bank", institution_name: "A bank with a longer institution name", accounts: [], sync_status: "syncing", last_synced_at: null });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  for (const route of ["/connections", "/subscriptions"]) {
+    await page.goto(route);
+    await expect(page.locator(".sync-indicator .spinner")).toBeVisible();
+    await expect(page.locator(".sync-indicator .spinner")).toHaveCSS("animation-name", "none");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`${route.slice(1)}-mobile.png`), fullPage: true });
+  }
 });
 
 for (const width of [1024, 1440]) {

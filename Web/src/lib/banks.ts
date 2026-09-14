@@ -8,7 +8,8 @@ export type Connection = {
   last_synced_at: string | null;
 };
 
-export const listConnections = () => apiFetch<Connection[]>("/connections");
+export const listConnections = (signal?: AbortSignal) =>
+  apiFetch<Connection[]>("/connections", { signal });
 export const disconnect = (id: string) =>
   apiFetch<void>(`/connections/${encodeURIComponent(id)}`, {
     method: "DELETE",
