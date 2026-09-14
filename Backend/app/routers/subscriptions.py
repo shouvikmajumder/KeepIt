@@ -18,6 +18,7 @@ from psycopg import sql
 from psycopg.types.json import Jsonb
 from ..postgres import transaction
 from ..schemas import SubscriptionCreate, SubscriptionOut, SubscriptionUpdate
+from .expenses import ExpenseVisibility
 from ..recurrence import project
 
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
@@ -91,10 +92,21 @@ def update_subscription(sub_id: UUID, body: SubscriptionUpdate,
         if previous["source"] == "plaid":
             overrides = previous.get("user_overrides") or {}
             for key, value in payload.items():
-                if str(value) != str(current.get(key)):
+                if str(value) != str(current.get(key)) or (key == "payment_type" and key in body.model_fields_set):
                     overrides[key] = value
             payload["user_overrides"] = Jsonb(overrides)
         assignments = sql.SQL(",").join(sql.SQL("{}=%s").format(sql.Identifier(key)) for key in payload)
         query = sql.SQL("update public.subscriptions set {} where id=%s and user_id=%s returning *").format(assignments)
         result = db.execute(query, (*payload.values(), sub_id, user_id)).fetchone()
         return project(result, today or date.today())
+
+
+@router.patch("/{sub_id}/visibility", response_model=SubscriptionOut)
+def update_visibility(sub_id: UUID, body: ExpenseVisibility,
+                      user_id: str = Depends(get_current_user_id)):
+    with transaction() as db:
+        row = db.execute("""update public.subscriptions set hidden=%s
+            where id=%s and user_id=%s returning *""", (body.hidden, sub_id, user_id)).fetchone()
+        if not row:
+            raise HTTPException(404, "Subscription not found")
+        return project(row, date.today())

@@ -22,6 +22,11 @@ def next_occurrence(anchor: date, interval: str, today: date) -> date:
 def project(row: dict, today: date) -> dict:
     result = dict(row)
     result["account_label"] = (row.get("provider_observation") or {}).get("account_label")
+    observed = row.get("provider_observation") or {}
+    result["detection"] = ({"source": observed.get("detection_source", "plaid"),
+        "confidence": "strong", "payment_count": observed.get("payment_count", 0),
+        "reason_codes": observed.get("reason_codes", [])}
+        if row.get("source") == "plaid" and observed.get("confidence") == "strong" else None)
     if row.get("status", "active") == "active":
         anchor = date.fromisoformat(str(row.get("recurrence_anchor") or row["next_renewal_date"]))
         result["next_renewal_date"] = next_occurrence(

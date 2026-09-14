@@ -33,6 +33,7 @@ class TrackingAPI(DatabaseCase):
         result = self.client.get("/dashboard?month=2026-02").json()
         self.assertEqual(result["subscription_monthly_estimate"], "22.00")
         self.assertEqual(result["spending_total"], "0.00")
+        self.assertNotIn("provider_observation", result["upcoming"][0])
         payload = {key: sub[key] for key in ("name", "cost", "billing_interval", "currency")}
         payload.update(next_renewal_date="2026-02-28", status="active")
         edited = self.client.patch(f"/subscriptions/{sub['id']}?today=2026-02-01", json=payload)
@@ -78,3 +79,14 @@ class TrackingAPI(DatabaseCase):
         hidden = self.client.patch(f"/subscriptions/{sub['id']}", json=payload)
         self.assertTrue(hidden.json()["hidden"])
         self.assertEqual(self.client.get("/dashboard?month=2026-02").json()["subscription_monthly_estimate"], "0.00")
+
+    def test_visibility_only_preserves_price_and_checks_owner(self):
+        sub = self.create()
+        response = self.client.patch(f"/subscriptions/{sub['id']}/visibility", json={"hidden": True})
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["hidden"])
+        self.assertEqual(response.json()["cost"], sub["cost"])
+        with transaction() as db:
+            self.assertEqual(db.execute("select user_overrides from public.subscriptions where id=%s", (sub["id"],)).fetchone()["user_overrides"], {})
+        app.dependency_overrides[get_current_user_id] = lambda: str(self.other)
+        self.assertEqual(self.client.patch(f"/subscriptions/{sub['id']}/visibility", json={"hidden": False}).status_code, 404)

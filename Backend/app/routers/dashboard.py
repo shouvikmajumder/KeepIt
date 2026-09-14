@@ -2,6 +2,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends
 from ..auth import get_current_user_id
 from ..recurrence import monthly_total
+from ..schemas import SubscriptionOut
 from .subscriptions import list_subscriptions
 from ..postgres import transaction
 from .expenses import CATEGORY_LABELS, EXCLUDED_PRIMARY, label, month_bounds
@@ -49,7 +50,7 @@ def dashboard(month: str = None, account_id: str = None,
             where user_id=%s order by created_at""", (user_id,)).fetchall()
     rows = list_subscriptions(user_id, start)
     active = [row for row in rows if row["status"] == "active" and not row["hidden"]]
-    subscriptions = [row for row in active if row["payment_type"] != "bill"]
+    subscriptions = [row for row in active if row["payment_type"] == "subscription"]
     bills = [row for row in active if row["payment_type"] == "bill"]
     combined = {}
     for row in categories:
@@ -64,6 +65,7 @@ def dashboard(month: str = None, account_id: str = None,
             "previous_month_total": money(prior), "change_amount": money(Decimal(current) - Decimal(prior)),
             "currency": "USD", "categories": category_rows,
             "subscription_monthly_estimate": str(monthly_total(subscriptions)),
-            "bill_monthly_estimate": str(monthly_total(bills)), "upcoming": active[:5],
+            "bill_monthly_estimate": str(monthly_total(bills)),
+            "upcoming": [SubscriptionOut.model_validate(row).model_dump(mode="json") for row in active[:5]],
             "accounts": accounts, "last_synced_at": max(synced).isoformat() if synced else None,
             "syncing": any(row["sync_status"] == "syncing" for row in connections)}

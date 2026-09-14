@@ -32,6 +32,13 @@ class SubscriptionCreate(BaseModel):
         return value
 
 
+class DetectionOut(BaseModel):
+    source: Literal["plaid", "history"]
+    confidence: Literal["strong"]
+    payment_count: int
+    reason_codes: list[str]
+
+
 class SubscriptionOut(BaseModel):
     """One subscription row, exactly as the app reads it back."""
 
@@ -48,6 +55,7 @@ class SubscriptionOut(BaseModel):
     payment_type: Literal["subscription", "bill", "unknown"]
     hidden: bool
     account_label: str | None = None
+    detection: DetectionOut | None = None
 
 
 class SubscriptionUpdate(SubscriptionCreate):
